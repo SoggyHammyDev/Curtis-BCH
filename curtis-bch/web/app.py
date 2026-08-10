@@ -913,9 +913,7 @@ def _update_network_conf(network: str):
     _set_conf_key(lines, "scalenet", "0")
     _set_conf_key(lines, "chipnet", "0")
     _set_conf_key(lines, "testnet4", "1" if network == "testnet4" else "0")
-    NODE_CONF_PATH.write_text("
-".join(lines).rstrip() + "
-", encoding="utf-8")
+    NODE_CONF_PATH.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
 
 
 def _update_prune_conf(prune: int):
