@@ -125,7 +125,7 @@ services:
       - ${APP_DATA_DIR}/data/pool/www:/www
 
   app:
-    image: ${CURTIS_BCH_APP_IMAGE:-ghcr.io/soggyhammydev/curtis-bch-app:0.1.0}
+    image: ghcr.io/soggyhammydev/curtis-bch-app:0.1.0
     user: "1000:1000"
     restart: unless-stopped
     depends_on:
