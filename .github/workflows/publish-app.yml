@@ -27,6 +27,6 @@ jobs:
           context: ./curtis-bch/web
           push: true
           tags: |
-            ghcr.io/soggyhammydev/curtis-bch-app:0.1.0
+            ghcr.io/soggyhammydev/curtis-bch-app:0.1.4
             ghcr.io/soggyhammydev/curtis-bch-app:latest
           platforms: linux/amd64

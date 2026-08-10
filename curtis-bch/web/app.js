@@ -2645,8 +2645,8 @@ function startChartInterval() {
   }, 30000);
 }
 
-document.getElementById('tab-home').addEventListener('click', () => showTab('home'));
-document.getElementById('tab-pool').addEventListener('click', async () => {
+document.getElementById('tab-home')?.addEventListener('click', () => showTab('home'));
+document.getElementById('tab-pool')?.addEventListener('click', async () => {
   showTab('pool');
   startChartInterval();
   await refreshCharts();
@@ -2656,7 +2656,7 @@ document.getElementById('tab-luck')?.addEventListener('click', async () => {
   showTab('luck');
   await refreshLuck();
 });
-document.getElementById('go-pool').addEventListener('click', async () => {
+document.getElementById('go-pool')?.addEventListener('click', async () => {
   showTab('pool');
   startChartInterval();
   await refreshCharts();
@@ -2666,7 +2666,7 @@ document.getElementById('tab-blocks')?.addEventListener('click', async () => {
   showTab('blocks');
   await refreshBlocks();
 });
-document.getElementById('tab-settings').addEventListener('click', async () => {
+document.getElementById('tab-settings')?.addEventListener('click', async () => {
   showTab('settings');
   await loadSettings();
   await loadPoolSettings();
@@ -2677,12 +2677,12 @@ document.getElementById('tab-project')?.addEventListener('click', () => {
 
 // Support is via Discord (link in Settings).
 
-document.getElementById('trail').addEventListener('change', async () => {
+document.getElementById('trail')?.addEventListener('change', async () => {
   localStorage.setItem('bchTrail', document.getElementById('trail').value);
   await refreshCharts();
 });
 
-document.getElementById('settings-form').addEventListener('submit', async (e) => {
+document.getElementById('settings-form')?.addEventListener('submit', async (e) => {
   e.preventDefault();
   const status = document.getElementById('settings-status');
   if (status) status.textContent = '';
@@ -2714,7 +2714,7 @@ document.getElementById('settings-form').addEventListener('submit', async (e) =>
   }
 });
 
-document.getElementById('pool-settings-form').addEventListener('submit', async (e) => {
+document.getElementById('pool-settings-form')?.addEventListener('submit', async (e) => {
   e.preventDefault();
   const status = document.getElementById('pool-settings-status');
   if (status) status.textContent = '';
@@ -2935,4 +2935,27 @@ document.addEventListener('DOMContentLoaded', () => {
     const h = document.getElementById('page-title');
     if (h) h.textContent = titleMap[t] || 'Curtis BCH';
   }));
+});
+
+
+// Curtis BCH 0.1.4 UI bridge: keep the redesigned controls synchronized with
+// the legacy controller IDs while the controller is progressively refactored.
+document.addEventListener('DOMContentLoaded', () => {
+  const pairs = [
+    ['payoutAddress','payout-address'],
+    ['showInactiveWorkers','workers-show-inactive']
+  ];
+  for (const [modernId, legacyId] of pairs) {
+    const modern=document.getElementById(modernId), legacy=document.getElementById(legacyId);
+    if (!modern || !legacy) continue;
+    const sync=()=>{ if ('checked' in modern && modern.type==='checkbox') legacy.checked=modern.checked; else legacy.value=modern.value; legacy.dispatchEvent(new Event('change',{bubbles:true})); };
+    modern.addEventListener('change',sync);
+    modern.addEventListener('input',sync);
+  }
+
+  document.getElementById('savePoolSettings')?.addEventListener('click', () => {
+    const modern=document.getElementById('payoutAddress'), legacy=document.getElementById('payout-address');
+    if (modern && legacy) legacy.value=modern.value;
+    document.getElementById('pool-settings-form')?.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));
+  });
 });

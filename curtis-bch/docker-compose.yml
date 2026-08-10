@@ -126,7 +126,7 @@ services:
       - ${APP_DATA_DIR}/data/pool/www:/www
 
   app:
-    image: ghcr.io/soggyhammydev/curtis-bch-app:0.1.0
+    image: ghcr.io/soggyhammydev/curtis-bch-app:0.1.4
     user: "1000:1000"
     restart: on-failure
     stop_grace_period: 30s
@@ -156,7 +156,7 @@ services:
       CKPOOL_STRATUM_HOST: ckpool
       CKPOOL_STRATUM_PORT: "3333"
       APP_CHANNEL: CURTIS
-      APP_VERSION: "0.1.3"
+      APP_VERSION: "0.1.4"
       STATIC_DIR: /app/static
     healthcheck:
       test:
