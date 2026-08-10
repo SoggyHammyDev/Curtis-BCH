@@ -37,5 +37,5 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: |
-            ghcr.io/akacurtis/curtis-bch-app:0.1.0
-            ghcr.io/akacurtis/curtis-bch-app:latest
+            ghcr.io/soggyhammydev/curtis-bch-app:0.1.0
+            ghcr.io/soggyhammydev/curtis-bch-app:latest
