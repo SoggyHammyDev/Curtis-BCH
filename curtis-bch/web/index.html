@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Curtis BCH v__APP_VERSION__</title>
+  <link rel="icon" type="image/png" href="icon.svg">
+  <link rel="stylesheet" href="app.css?v=__APP_VERSION__&cb=curtis2">
+  <script defer src="app.js?v=__APP_VERSION__&cb=curtis2"></script>
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">₿</div>
+      <div><strong>Curtis BCH</strong><span>Solo Mining Console</span></div>
+    </div>
+    <nav class="nav">
+      <button id="tab-home" data-tab="home" class="nav-item active"><span>⌂</span>Overview</button>
+      <button id="tab-pool" data-tab="pool" class="nav-item"><span>◫</span>Miners</button>
+      <button id="tab-luck" data-tab="luck" class="nav-item"><span>◎</span>Round</button>
+      <button id="tab-blocks" data-tab="blocks" class="nav-item"><span>◆</span>Blocks</button>
+      <button id="tab-settings" data-tab="settings" class="nav-item"><span>⚙</span>Settings</button>
+      <button id="tab-project" data-tab="project" class="nav-item"><span>i</span>About</button>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="status-dot"></div>
+      <div><b>Bitcoin Cash</b><span id="network-name">Mainnet</span></div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">PRIVATE SOLO POOL</div>
+        <h1 id="page-title">Mining Overview</h1>
+      </div>
+      <div class="top-actions">
+        <span id="channel-pill" class="badge">__APP_CHANNEL__</span>
+        <span class="version">v__APP_VERSION__</span>
+      </div>
+    </header>
+
+    <section id="view-home" class="view">
+      <div class="hero-grid">
+        <article class="hero-card">
+          <div class="card-kicker">POOL HASHRATE</div>
+          <div class="hero-value" id="hashrate">-</div>
+          <div class="hero-sub"><span id="workers">-</span> active miners</div>
+          <div class="sparkline-wrap"><canvas id="hashrateChart"></canvas></div>
+        </article>
+        <article class="hero-card">
+          <div class="card-kicker">BEST SHARE · ROUND</div>
+          <div class="hero-value" id="bestshare-since">-</div>
+          <div class="hero-sub">All time <b id="bestshare-alltime">-</b></div>
+          <div class="target-track"><div id="bestshare-progress" class="target-fill"></div></div>
+        </article>
+        <article class="hero-card accent">
+          <div class="card-kicker">ESTIMATED BLOCK TIME</div>
+          <div class="hero-value" id="eta">-</div>
+          <div class="hero-sub">Statistical average at current hashrate</div>
+          <div id="odds-summary" class="mini-note">Waiting for pool data</div>
+        </article>
+      </div>
+
+      <div class="content-grid">
+        <article class="panel span2">
+          <div class="panel-head"><div><span class="panel-kicker">SYSTEM</span><h2>Mining readiness</h2></div><span id="readiness-overall" class="health">Checking</span></div>
+          <div class="health-grid">
+            <div class="health-item"><span>Node</span><b id="readiness-node">Checking</b></div>
+            <div class="health-item"><span>Pool</span><b id="readiness-pool">Checking</b></div>
+            <div class="health-item"><span>Stratum</span><b id="readiness-stratum">Checking</b></div>
+            <div class="health-item"><span>Template</span><b id="template-status">Checking</b></div>
+          </div>
+          <p id="readiness-message" class="muted">Loading node and pool state…</p>
+          <p id="readiness-gate" class="muted small"></p>
+          <p id="readiness-next-step" class="muted small"></p>
+          <p id="readiness-repair" class="muted small"></p>
+        </article>
+
+        <article class="panel">
+          <span class="panel-kicker">NETWORK</span><h2>Bitcoin Cash</h2>
+          <dl class="facts">
+            <div><dt>Height</dt><dd id="height">-</dd></div>
+            <div><dt>Difficulty</dt><dd id="difficulty">-</dd></div>
+            <div><dt>Peers</dt><dd id="peers">-</dd></div>
+            <div><dt>Sync</dt><dd id="sync">-</dd></div>
+          </dl>
+        </article>
+
+        <article class="panel span3">
+          <div class="panel-head"><div><span class="panel-kicker">MINERS</span><h2>Live fleet</h2></div><button class="ghost" onclick="showTab('pool')">View all →</button></div>
+          <div id="workers-home" class="miner-list"><div class="empty">Waiting for worker data…</div></div>
+        </article>
+      </div>
+    </section>
+
+    <section id="view-pool" class="view hidden">
+      <div class="section-intro"><div><span class="panel-kicker">FLEET</span><h2>Connected miners</h2><p>Live worker performance, shares and best difficulty.</p></div><label class="toggle"><input id="showInactiveWorkers" type="checkbox"><span>Show inactive · 24h</span></label></div>
+      <div class="hero-grid compact">
+        <article class="metric"><span>Active</span><b id="workers-summary">-</b></article>
+        <article class="metric"><span>Pool hashrate</span><b id="hashrate-summary">-</b></article>
+        <article class="metric"><span>Best share</span><b id="bestshare-summary">-</b></article>
+      </div>
+      <article class="panel"><div id="worker-details-status" class="muted">Loading miners…</div><div id="worker-details-rows" class="miner-list detailed"></div></article>
+      <div class="hidden" id="last-share">-</div>
+    </section>
+
+    <section id="view-luck" class="view hidden">
+      <div class="round-layout">
+        <article class="round-hero">
+          <span class="panel-kicker">CURRENT ROUND</span>
+          <div id="luck-current-headline" class="round-number">-</div>
+          <div class="round-label">expected effort</div>
+          <div class="round-track"><div id="luck-progress-fill" class="round-fill"></div></div>
+          <p id="luck-current-summary">Waiting for round data.</p>
+          <div id="luck-current-pct" class="hidden">-</div>
+          <div id="luck-progress-note" class="muted small">Expected block at 100% effort.</div>
+        </article>
+        <article class="panel">
+          <span class="panel-kicker">ROUND DATA</span>
+          <dl class="facts">
+            <div><dt id="luck-since-label">Since tracking began</dt><dd id="luck-since">-</dd></div>
+            <div><dt>Work submitted</dt><dd id="luck-round-work">-</dd></div>
+            <div><dt>Shares</dt><dd id="luck-round-shares">-</dd></div>
+            <div><dt>Average</dt><dd id="luck-average">-</dd></div>
+            <div><dt>Best</dt><dd id="luck-best">-</dd></div>
+            <div><dt>Worst</dt><dd id="luck-worst">-</dd></div>
+          </dl>
+        </article>
+      </div>
+      <article class="panel"><div class="panel-head"><div><span class="panel-kicker">HISTORY</span><h2>Recent rounds</h2></div><span id="luck-status" class="muted"></span></div><div id="luck-rows" class="history-list"></div></article>
+    </section>
+
+    <section id="view-blocks" class="view hidden">
+      <div class="section-intro"><div><span class="panel-kicker">SOLVES</span><h2>Block history</h2><p>Blocks found by this Curtis BCH pool.</p></div></div>
+      <article class="panel"><div id="blocks-status" class="muted">Loading block history…</div><div id="blocks-rows" class="history-list"></div></article>
+      <article class="panel advanced"><div class="panel-head"><div><span class="panel-kicker">RECOVERY</span><h2>Historical scan</h2></div></div>
+        <div class="form-row"><label>Blocks per scan<input id="blockScanSpeed" class="input" type="number" min="1" step="1"></label><button id="blockScanSave" class="primary">Save scan speed</button></div>
+        <div id="blockScanStatus" class="muted small"></div>
+      </article>
+    </section>
+
+    <section id="view-settings" class="view hidden">
+      <div class="settings-grid">
+        <article class="panel">
+          <span class="panel-kicker">POOL</span><h2>Solo mining</h2>
+          <label>Payout address<input id="payoutAddress" class="input mono" type="text" placeholder="bitcoincash:q… or legacy address"></label>
+          <label>Difficulty preset<select id="vardiffPreset" class="input"><option value="micro">Micro</option><option value="small">Small</option><option value="home">Home</option><option value="farm">Farm</option><option value="mega">Mega</option><option value="custom">Custom</option></select></label>
+          <div class="triple"><label>Minimum<input id="mindiff" class="input" type="number"></label><label>Starting<input id="startdiff" class="input" type="number"></label><label>Maximum<input id="maxdiff" class="input" type="number"></label></div>
+          <button id="savePoolSettings" class="primary">Save pool settings</button><div id="poolSettingsStatus" class="muted small"></div>
+        </article>
+        <article class="panel">
+          <span class="panel-kicker">NODE</span><h2>BCHN configuration</h2>
+          <label>Prune size · MiB<input id="pruneMiB" class="input" type="number"></label>
+          <label>Database cache · MiB<input id="dbcacheMiB" class="input" type="number"></label>
+          <label>Max mempool · MiB<input id="maxMempoolMiB" class="input" type="number"></label>
+          <label>RPC threads<input id="rpcThreads" class="input" type="number"></label>
+          <button id="saveNodeSettings" class="primary">Save node settings</button><div id="nodeSettingsStatus" class="muted small"></div>
+        </article>
+        <article class="panel danger-zone">
+          <span class="panel-kicker">RECORDS</span><h2>Best share tracker</h2><p class="muted">Reset the Curtis BCH “since block” best-share record without altering CKPool's own files.</p>
+          <button id="bestshare-reset-open" class="danger">Reset best share</button><div id="bestshare-reset-feedback" class="muted small"></div>
+        </article>
+      </div>
+    </section>
+
+    <section id="view-project" class="view hidden">
+      <div class="about-hero"><div class="brand-mark huge">₿</div><span class="panel-kicker">CURTIS BCH</span><h2>Your private Bitcoin Cash solo pool.</h2><p>BCHN + CKPool with miner monitoring, round effort, best-share records and block history — running on your own hardware.</p></div>
+      <div class="hero-grid compact"><article class="metric"><span>Pool mode</span><b>Private Solo</b></article><article class="metric"><span>Pool fee</span><b>0%</b></article><article class="metric"><span>Version</span><b>__APP_VERSION__</b></article></div>
+    </section>
+  </main>
+</div>
+
+<div id="bestshare-reset-modal" class="modal hidden"><div class="modal-card"><span class="panel-kicker">CONFIRM</span><h2>Reset best share?</h2><p>This resets the Curtis BCH since-block tracker. CKPool's underlying files are not modified.</p><div class="modal-actions"><button id="bestshare-reset-cancel" class="ghost">Cancel</button><button id="bestshare-reset-confirm" class="danger">Reset</button></div></div></div>
+<div id="block-win-modal" class="modal hidden"><div class="modal-card win"><div class="brand-mark huge">◆</div><h2>BLOCK FOUND!</h2><p id="block-win-message">Curtis BCH found a Bitcoin Cash block.</p><button id="block-win-close" class="primary">Awesome</button></div></div>
+<div id="cashaddr-modal" class="modal hidden"><div class="modal-card"><h2>CashAddr converted</h2><p>Curtis BCH converted your CashAddr locally to the legacy format CKPool expects.</p><div id="cashaddr-legacy" class="codebox"></div><button id="cashaddr-modal-close" class="primary">OK</button></div></div>
+</body>
+</html>

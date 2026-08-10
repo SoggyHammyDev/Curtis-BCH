@@ -1,0 +1,53 @@
+manifestVersion: 1
+id: curtis-bch
+category: bitcoin
+name: Curtis BCH
+version: "0.1.0"
+tagline: Private Bitcoin Cash solo mining console
+description: >-
+  Run your own Bitcoin Cash node and private CKPool solo mining stack with the
+  Curtis BCH dashboard. Monitor miners, best shares, round effort, block history,
+  BCHN sync state, and pool readiness from Umbrel.
+
+  Miner connection:
+    - URL: stratum+tcp://<your-umbrel-ip>:6387
+    - Username: walletAddress.workername
+    - Password: anything
+developer: AkaCurtis
+website: https://github.com/AkaCurtis/hammy-bch-test
+repo: https://github.com/AkaCurtis/hammy-bch-test
+support: https://github.com/AkaCurtis/hammy-bch-test/issues
+gallery: []
+dependencies: []
+port: 24781
+icon: icon.svg
+widgets:
+  - id: sync
+    type: text-with-progress
+    refresh: 5s
+    endpoint: http://curtis-bch-app:3000/api/widget/sync
+    example:
+      type: text-with-progress
+      title: BCH sync
+      text: "83%"
+      progressLabel: In progress
+      progress: 0.83
+  - id: pool
+    type: three-stats
+    refresh: 30s
+    endpoint: http://curtis-bch-app:3000/api/widget/pool
+    example:
+      type: three-stats
+      items:
+        - title: Hashrate
+          text: "1.2"
+          subtext: TH/s
+        - title: Workers
+          text: "2"
+        - title: Best Share
+          text: "21"
+          subtext: G
+backupIgnore:
+  - data/node/blocks
+  - data/node/chainstate
+  - data/node/indexes
