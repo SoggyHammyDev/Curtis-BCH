@@ -22,9 +22,15 @@ set_conf rpcbind "0.0.0.0"
 set_conf rpcport 28332
 set_conf port 28333
 set_conf zmqpubhashblock "tcp://0.0.0.0:28334"
-set_conf prune "${PRUNE_MIB:-5500}"
-set_conf dbcache "${DBCACHE_MIB:-1024}"
-set_conf maxmempool "${MAX_MEMPOOL_MIB:-128}"
-set_conf rpcthreads "${RPC_THREADS:-8}"
+ensure_conf() {
+  key="$1"; value="$2"
+  if ! grep -q "^${key}=" "$CONF"; then
+    printf '%s=%s\n' "$key" "$value" >> "$CONF"
+  fi
+}
+ensure_conf prune "${PRUNE_MIB:-5500}"
+ensure_conf dbcache "${DBCACHE_MIB:-1024}"
+ensure_conf maxmempool "${MAX_MEMPOOL_MIB:-128}"
+ensure_conf rpcthreads "${RPC_THREADS:-8}"
 
 exec bitcoind -datadir=/data -printtoconsole

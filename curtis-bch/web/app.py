@@ -64,7 +64,7 @@ SUPPORT_CHECKIN_URL = _env_or_default("SUPPORT_CHECKIN_URL", f"{DEFAULT_SUPPORT_
 SUPPORT_TICKET_URL = _env_or_default("SUPPORT_TICKET_URL", f"{DEFAULT_SUPPORT_BASE_URL}/api/support/upload")
 
 APP_ID = "curtis-bch"
-APP_VERSION = os.getenv("APP_VERSION", "0.1.5").strip() or "0.1.5"
+APP_VERSION = os.getenv("APP_VERSION", "0.1.6").strip() or "0.1.6"
 APP_VERSION_SUFFIX = os.getenv("APP_VERSION_SUFFIX", "").strip()
 DISPLAY_VERSION = f"{APP_VERSION}{APP_VERSION_SUFFIX}"
 
@@ -894,15 +894,18 @@ def _build_support_bundle_zip(payload: dict) -> tuple[bytes, str]:
 
 def _current_settings():
     conf = _read_conf_kv(NODE_CONF_PATH)
-    net = "mainnet"
-    if conf.get("regtest") == "1":
-        net = "regtest"
-    elif conf.get("testnet") == "1":
-        net = "testnet"
-    prune = int(conf.get("prune") or 0)
-    txindex = int(conf.get("txindex") or 0)
-    return {"network": net, "prune": prune, "txindex": txindex}
+    try:
+        prune = int(conf.get("prune") or 5500)
+    except Exception:
+        prune = 5500
+    return {"prune": prune}
 
+
+def _update_prune_conf(prune: int):
+    NODE_CONF_PATH.parent.mkdir(parents=True, exist_ok=True)
+    lines = NODE_CONF_PATH.read_text(encoding="utf-8", errors="replace").splitlines() if NODE_CONF_PATH.exists() else []
+    _set_conf_key(lines, "prune", str(int(prune)))
+    NODE_CONF_PATH.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
 
 def _node_status():
     info = _rpc_call("getblockchaininfo")
@@ -3900,36 +3903,17 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(*_json({"error": "invalid json"}, status=400))
 
         if self.path == "/api/settings":
-            prev = _current_settings()
-            network = str(body.get("network") or "").strip().lower()
-            prune_raw = body.get("prune")
-            txindex_raw = body.get("txindex")
-
             try:
-                prune = int(prune_raw)
+                prune = int(body.get("prune"))
             except Exception:
                 return self._send(*_json({"error": "invalid prune"}, status=400))
-
             if prune != 0 and prune < 550:
-                return self._send(*_json({"error": "prune must be 0 or >= 550"}, status=400))
-
-            txindex = 1 if bool(txindex_raw) else 0
-
+                return self._send(*_json({"error": "prune must be 0 or >= 550 MiB"}, status=400))
             try:
-                _update_node_conf(network=network, prune=prune, txindex=txindex)
+                _update_prune_conf(prune)
             except Exception as e:
                 return self._send(*_json({"error": str(e)}, status=400))
-
-            reindex_required = False
-            try:
-                prev_prune = int(prev.get("prune") or 0)
-            except Exception:
-                prev_prune = 0
-            if prev_prune > 0 and prune == 0:
-                reindex_required = True
-                _request_reindex_chainstate()
-
-            return self._send(*_json({"ok": True, "restartRequired": True, "reindexRequired": reindex_required}))
+            return self._send(*_json({"ok": True, "settings": {"prune": prune}, "restartRequired": True}))
 
         if self.path == "/api/pool/settings":
             payout_address = str(body.get("payoutAddress") or "")

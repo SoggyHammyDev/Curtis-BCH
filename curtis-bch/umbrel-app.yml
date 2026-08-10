@@ -2,7 +2,7 @@ manifestVersion: 1
 id: curtis-bch
 category: bitcoin
 name: Curtis BCH
-version: "0.1.5"
+version: "0.1.6"
 tagline: Private Bitcoin Cash solo mining console
 description: >-
   Run your own Bitcoin Cash node and private CKPool solo mining stack with the

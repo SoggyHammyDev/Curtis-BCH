@@ -1568,6 +1568,25 @@ async function refresh() {
 
     document.getElementById('blocks').textContent = node.blocks ?? '-';
     document.getElementById('headers').textContent = node.headers ?? '-';
+    const heightModern = document.getElementById('height');
+    if (heightModern) {
+      const b = Number(node.blocks), h = Number(node.headers);
+      heightModern.textContent = Number.isFinite(b) && Number.isFinite(h) && h > 0
+        ? `${b.toLocaleString()} / ${h.toLocaleString()}`
+        : (node.blocks ?? '-');
+    }
+    const difficultyModern = document.getElementById('difficulty');
+    if (difficultyModern) difficultyModern.textContent = formatBestShare(node.difficulty);
+    const syncModern = document.getElementById('sync');
+    if (syncModern) {
+      const verifyPct = Math.max(0, Math.min(100, Number(node.verificationprogress || 0) * 100));
+      const blockPct = Number(node.headers) > 0
+        ? Math.max(0, Math.min(100, Number(node.blocks || 0) / Number(node.headers) * 100))
+        : 0;
+      syncModern.textContent = ibd
+        ? `${verifyPct < 1 ? verifyPct.toFixed(4) : verifyPct.toFixed(2)}% verified · ${blockPct.toFixed(1)}% blocks`
+        : '100%';
+    }
     const lagEl = document.getElementById('chain-lag');
     const lagSubEl = document.getElementById('chain-lag-sub');
     if (lagEl) {
@@ -2591,7 +2610,11 @@ async function loadSettings() {
   try {
     const s = await fetchJson('/api/settings');
     document.getElementById('network').value = s.network || 'mainnet';
-    document.getElementById('prune').value = s.prune ?? 0;
+    const pruneValue = s.prune ?? 5500;
+    const legacyPrune = document.getElementById('prune');
+    if (legacyPrune) legacyPrune.value = pruneValue;
+    const modernPrune = document.getElementById('pruneMiB');
+    if (modernPrune) modernPrune.value = pruneValue;
     document.getElementById('settings-status').textContent = '';
   } catch {
     document.getElementById('settings-status').textContent = 'Settings unavailable (node may be starting).';
@@ -2680,6 +2703,27 @@ document.getElementById('tab-project')?.addEventListener('click', () => {
 document.getElementById('trail')?.addEventListener('change', async () => {
   localStorage.setItem('bchTrail', document.getElementById('trail').value);
   await refreshCharts();
+});
+
+document.getElementById('saveNodeSettings')?.addEventListener('click', async () => {
+  const status = document.getElementById('nodeSettingsStatus');
+  const input = document.getElementById('pruneMiB');
+  const prune = Number(input && input.value);
+  if (!Number.isInteger(prune) || (prune !== 0 && prune < 550)) {
+    if (status) status.textContent = 'Enter 0 for unpruned, or at least 550 MiB.';
+    return;
+  }
+  if (status) status.textContent = 'Saving…';
+  try {
+    const res = await postJson('/api/settings', { prune });
+    const legacy = document.getElementById('prune');
+    if (legacy) legacy.value = prune;
+    if (status) status.textContent = res && res.restartRequired
+      ? `Saved ${prune.toLocaleString()} MiB. Restart Curtis BCH to apply it.`
+      : `Saved ${prune.toLocaleString()} MiB.`;
+  } catch (err) {
+    if (status) status.textContent = `Save failed: ${err && err.message ? err.message : String(err)}`;
+  }
 });
 
 document.getElementById('settings-form')?.addEventListener('submit', async (e) => {
@@ -2943,7 +2987,8 @@ document.addEventListener('DOMContentLoaded', () => {
 document.addEventListener('DOMContentLoaded', () => {
   const pairs = [
     ['payoutAddress','payout-address'],
-    ['showInactiveWorkers','workers-show-inactive']
+    ['showInactiveWorkers','workers-show-inactive'],
+    ['pruneMiB','prune']
   ];
   for (const [modernId, legacyId] of pairs) {
     const modern=document.getElementById(modernId), legacy=document.getElementById(legacyId);
