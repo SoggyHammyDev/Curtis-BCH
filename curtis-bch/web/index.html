@@ -107,14 +107,29 @@
     </section>
 
     <section id="view-pool" class="view hidden">
-      <div class="section-intro"><div><span class="panel-kicker">FLEET</span><h2>Connected miners</h2><p>Live worker performance, shares and best difficulty.</p></div><label class="toggle"><input id="showInactiveWorkers" type="checkbox"><span>Show inactive · 24h</span></label></div>
-      <div class="hero-grid compact">
-        <article class="metric"><span>Active</span><b id="workers-summary">-</b></article>
-        <article class="metric"><span>Pool hashrate</span><b id="hashrate-summary">-</b></article>
-        <article class="metric"><span>Best share</span><b id="bestshare-summary">-</b></article>
+      <div class="miners-page-head">
+        <div>
+          <span class="panel-kicker">FLEET</span>
+          <h2>Mining Workers</h2>
+          <p id="worker-details-status" class="miners-active-count">Loading miners…</p>
+        </div>
+        <div class="miners-head-actions">
+          <span class="miners-auto"><span class="miners-live-dot"></span>Auto-refresh: 5s</span>
+          <button id="refreshWorkersNow" class="ghost" type="button">↻ Refresh Now</button>
+          <label class="toggle"><input id="showInactiveWorkers" type="checkbox"><span>Show inactive · 24h</span></label>
+        </div>
       </div>
-      <article class="panel"><div id="worker-details-status" class="muted">Loading miners…</div><div id="worker-details-rows" class="miner-list detailed"></div></article>
+
+      <div id="worker-details-rows" class="miners-worker-list"></div>
       <div class="hidden" id="last-share">-</div>
+
+      <article class="panel miners-about-card">
+        <div class="miners-about-icon">i</div>
+        <div>
+          <h3>About Best Shares</h3>
+          <p>Best share is based on difficulty. Higher is better. Resetting starts a new local record session for that worker.</p>
+        </div>
+      </article>
     </section>
 
     <section id="view-luck" class="view hidden">

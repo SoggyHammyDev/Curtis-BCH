@@ -211,786 +211,212 @@ function renderWorkerDetails(miners) {
   const lastShareEl = document.getElementById('last-share');
   if (!rows) return;
 
-  rows.innerHTML = '';
   const list = Array.isArray(miners) ? miners : [];
-  const totalWorkers = Number.isFinite(Number(miners && miners._totalWorkers)) ? Number(miners._totalWorkers) : null;
-  const showInactive = Boolean(document.getElementById('workers-show-inactive')?.checked);
-  if (!list.length) {
-    if (status) status.textContent = 'No workers connected yet.';
-    if (lastShareEl) lastShareEl.textContent = '-';
-    rows.innerHTML = '<div class="px-3 py-2 text-xs text-slate-400">Connect a miner to see per-worker stats.</div>';
-    return;
-  }
+  const showInactive = Boolean(document.getElementById('showInactiveWorkers')?.checked ||
+                               document.getElementById('workers-show-inactive')?.checked);
 
-  const statusCount = totalWorkers != null && totalWorkers > 0 ? totalWorkers : list.length;
+  const nowMs = Date.now();
   const ACTIVE_WINDOW_S = 300;
   const STALE_WINDOW_S = 86400;
-  const nowMs = Date.now();
 
   const toMs = (v) => {
     if (v == null) return null;
-    if (typeof v === 'number') {
-      if (!Number.isFinite(v)) return null;
-      return v > 1e12 ? v : v * 1000;
-    }
+    if (typeof v === 'number' && Number.isFinite(v)) return v > 1e12 ? v : v * 1000;
     const parsed = Date.parse(String(v));
-    if (!Number.isFinite(parsed)) return null;
-    return parsed;
+    return Number.isFinite(parsed) ? parsed : null;
   };
 
-  const splitWorker = (usernameRaw, fallbackBase) => {
-    const raw = (usernameRaw || '').trim();
-    const base = (fallbackBase || '').trim();
-    if (!raw) return { name: '(default)', base: base || '' };
+  const ageSeconds = (m) => {
+    const ms = toMs(m?.lastshare ?? m?.lastShare);
+    return ms == null ? Infinity : Math.max(0, Math.floor((nowMs - ms) / 1000));
+  };
 
-    if (base && raw.startsWith(`${base}.`)) {
-      const suffix = raw.slice(base.length + 1).trim();
-      return { name: suffix || '(default)', base };
+  const ageText = (ageS) => {
+    if (!Number.isFinite(ageS)) return 'No recent share';
+    if (ageS < 60) return `${ageS}s ago`;
+    if (ageS < 3600) return `${Math.floor(ageS / 60)}m ago`;
+    if (ageS < 86400) return `${Math.floor(ageS / 3600)}h ago`;
+    return `${Math.floor(ageS / 86400)}d ago`;
+  };
+
+  const splitWorker = (m) => {
+    const raw = String(m?.workername ?? m?.workerName ?? m?.worker ?? '').trim();
+    const payout = String(window.__payoutAddress || m?.miner || '').trim();
+    if (!raw) return { name: '(default)', payout };
+
+    if (payout && raw.startsWith(`${payout}.`)) {
+      return { name: raw.slice(payout.length + 1) || '(default)', payout };
     }
 
     const idx = raw.lastIndexOf('.');
     if (idx > 0 && idx < raw.length - 1) {
-      const possibleBase = raw.slice(0, idx);
-      const suffix = raw.slice(idx + 1).trim();
-      return { name: suffix || '(default)', base: base || possibleBase };
+      return {
+        name: raw.slice(idx + 1).trim() || '(default)',
+        payout: payout || raw.slice(0, idx)
+      };
     }
 
-    return { name: '(default)', base: base || raw };
+    return { name: raw || '(default)', payout };
   };
 
-  const ageSFor = (m) => {
-    const ms = toMs(m.lastshare != null ? m.lastshare : m.lastShare);
-    if (ms == null) return Infinity;
-    return Math.max(0, Math.floor((nowMs - ms) / 1000));
-  };
-
-  const seen = list.filter((m) => ageSFor(m) <= STALE_WINDOW_S);
-  const active = seen.filter((m) => ageSFor(m) <= ACTIVE_WINDOW_S);
-  const inactive = seen.filter((m) => {
-    const ageS = ageSFor(m);
-    return ageS > ACTIVE_WINDOW_S && ageS <= STALE_WINDOW_S;
-  });
-  const visible = showInactive ? active.concat(inactive) : active;
+  const recent = list.filter((m) => ageSeconds(m) <= STALE_WINDOW_S);
+  const active = recent.filter((m) => ageSeconds(m) <= ACTIVE_WINDOW_S);
+  const inactive = recent.filter((m) => ageSeconds(m) > ACTIVE_WINDOW_S);
+  const visible = (showInactive ? active.concat(inactive) : active)
+    .slice()
+    .sort((a, b) => splitWorker(a).name.localeCompare(splitWorker(b).name));
 
   window.__lastWorkers = miners;
 
   if (status) {
-    const inactiveSuffix = showInactive && inactive.length ? ` + ${inactive.length} inactive` : '';
-    const seenSuffix = statusCount !== active.length ? ` (${Math.min(statusCount, seen.length)} seen)` : '';
-    status.textContent = `${active.length} worker${active.length === 1 ? '' : 's'} active${inactiveSuffix}${seenSuffix}`;
+    const suffix = showInactive && inactive.length ? ` · ${inactive.length} inactive` : '';
+    status.textContent = `${active.length} active worker${active.length === 1 ? '' : 's'}${suffix}`;
   }
 
-  const baseFor = (m) => {
-    const explicit = (window.__payoutAddress || '').trim();
-    if (explicit) return explicit;
-    const miner = m && m.miner != null ? String(m.miner).trim() : '';
-    return miner;
-  };
-  const sortKeyFor = (m) => {
-    const raw = m && (m.workername || m.workerName || m.worker) ? String(m.workername || m.workerName || m.worker) : '';
-    const split = splitWorker(raw, baseFor(m));
-    return (split.name || '').toLowerCase();
-  };
-  const sortByName = (a, b) => sortKeyFor(a).localeCompare(sortKeyFor(b));
-  const sortedVisible = visible.slice().sort(sortByName);
-  if (!sortedVisible.length) {
+  rows.innerHTML = '';
+
+  if (!visible.length) {
     if (lastShareEl) lastShareEl.textContent = '-';
-    rows.innerHTML = showInactive
-      ? '<div class="px-3 py-2 text-xs text-slate-400">No worker stats yet.</div>'
-      : '<div class="px-3 py-2 text-xs text-slate-400">No active workers. Turn on \"Show inactive (24h)\" to view recent workers.</div>';
+    rows.innerHTML = `
+      <article class="panel miners-empty">
+        ${showInactive ? 'No worker data in the last 24 hours.' : 'No active workers. Enable “Show inactive” to view recent miners.'}
+      </article>`;
     return;
   }
+
   const netDiff = Number(window.__networkDifficulty);
-  const maxBestSince = sortedVisible.reduce((acc, mm) => {
-    const raw = mm && (mm.bestshare_since_block ?? mm.bestShareSinceBlock);
-    const n = Number(raw);
-    return Number.isFinite(n) && n > acc ? n : acc;
-  }, 0);
 
-  const oddsWindow = (() => {
-    const raw = (window.__bchOddsWindow || localStorage.getItem('bchOddsWindow') || '7d').toLowerCase();
-    if (raw === '1m') return { key: '1m', s: 30 * 86400, label: '1 month', short: '1m' };
-    if (raw === '1y') return { key: '1y', s: 365 * 86400, label: '1 year', short: '1y' };
-    return { key: '7d', s: 7 * 86400, label: '7 days', short: '7d' };
-  })();
-  const LOG_GAMMA = 6.5;
-  const pctVsTarget = (shareDiff) => {
-    const v = Number(shareDiff);
-    if (!Number.isFinite(v) || v <= 0) return 0;
-    const target = Number.isFinite(netDiff) && netDiff > 0 ? netDiff : maxBestSince;
-    if (!Number.isFinite(target) || target <= 0) return 0;
-    const capped = Math.min(v, target);
-    const denom = Math.log10(1 + target);
-    if (!Number.isFinite(denom) || denom <= 0) return 0;
-    const ratioLog = Math.log10(1 + capped) / denom;
-    const pct = Math.pow(Math.max(0, Math.min(1, ratioLog)), LOG_GAMMA) * 100;
-    return Math.max(0, Math.min(100, pct));
-  };
+  visible.slice(0, 50).forEach((m) => {
+    const ageS = ageSeconds(m);
+    const isActive = ageS <= ACTIVE_WINDOW_S;
+    const { name, payout } = splitWorker(m);
 
-  const lerp = (a, b, t) => a + (b - a) * Math.max(0, Math.min(1, t));
-  const colorForLuckPct = (pct) => {
-    const p = Math.max(0, Math.min(100, Number(pct) || 0));
-    // 0..50: cyan -> magenta, 50..100: magenta -> orange
-    const c0 = { r: 0, g: 229, b: 255 };
-    const c1 = { r: 255, g: 43, b: 214 };
-    const c2 = { r: 255, g: 154, b: 0 };
-    const t = p / 100;
-    let r = 0, g = 0, b = 0;
-    if (t <= 0.5) {
-      const u = t / 0.5;
-      r = lerp(c0.r, c1.r, u);
-      g = lerp(c0.g, c1.g, u);
-      b = lerp(c0.b, c1.b, u);
-    } else {
-      const u = (t - 0.5) / 0.5;
-      r = lerp(c1.r, c2.r, u);
-      g = lerp(c1.g, c2.g, u);
-      b = lerp(c1.b, c2.b, u);
-    }
-    return `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
-  };
-  const scaleLuckForRing = (luckFrac) => {
-    const f = Number(luckFrac);
-    if (!Number.isFinite(f) || f <= 0) return 0;
-    // Log scaling for visibility (ring only). Text shows the true probability.
-    // ~0.001% -> ~1%, 0.01% -> ~7.5%, 0.1% -> ~26%, 1% -> ~50%.
-    const s = Math.log10(1 + f * 1e4) / 4;
-    return Math.max(0, Math.min(1, s));
-  };
+    const hrThs = Number(m?.hashrate_1m_ths ?? m?.hashrate_ths);
+    const hrText = Number.isFinite(hrThs) && hrThs >= 0 ? `${formatBestShare(hrThs)} TH/s` : '-';
 
-  const bestByWorker = window.__bestByWorker || (window.__bestByWorker = {});
-  const glazeHypeByWorker = window.__glazeHypeByWorker || (window.__glazeHypeByWorker = {});
-  const glazeGlowByWorker = window.__glazeGlowByWorker || (window.__glazeGlowByWorker = {});
-  const prevLastByWorker = window.__prevLastByWorker || (window.__prevLastByWorker = {});
-  const prevHrByWorker = window.__prevHrByWorker || (window.__prevHrByWorker = {});
-  const glazeEmaByWorker = window.__glazeEmaByWorker || (window.__glazeEmaByWorker = {});
-  const glazeShareStateByWorker = window.__glazeShareStateByWorker || (window.__glazeShareStateByWorker = {});
-  const glazeMetaByWorker = window.__glazeMetaByWorker || (window.__glazeMetaByWorker = {});
+    const best = Number(m?.bestshare_since_block ?? m?.bestShareSinceBlock ?? m?.bestshare ?? m?.bestShare);
+    const bestText = Number.isFinite(best) && best > 0 ? formatBestShare(best) : '-';
+    const targetText = Number.isFinite(netDiff) && netDiff > 0 ? formatBestShare(netDiff) : '-';
 
-  const clearGlazeForWorker = (key) => {
-    if (!key) return;
-    try {
-      delete glazeHypeByWorker[key];
-    } catch {}
-    try {
-      delete glazeGlowByWorker[key];
-    } catch {}
-    try {
-      delete glazeEmaByWorker[key];
-    } catch {}
-    try {
-      delete glazeShareStateByWorker[key];
-    } catch {}
-    try {
-      const levels = window.__glazeLevelByWorker;
-      if (levels) delete levels[key];
-    } catch {}
-  };
+    const linearPct = Number.isFinite(best) && best > 0 && Number.isFinite(netDiff) && netDiff > 0
+      ? (best / netDiff) * 100
+      : 0;
+    const cappedPct = Math.max(0, Math.min(100, linearPct));
 
-  const updateGlow = (key, intensity01) => {
-    const nowS = Date.now() / 1000;
-    const prev = glazeGlowByWorker[key];
-    const prevPeak = prev && Number.isFinite(prev.peak) ? Number(prev.peak) : 0;
-    const prevTs = prev && Number.isFinite(prev.ts) ? Number(prev.ts) : nowS;
-    // Slow decay so the donut "remembers" a record for a while.
-    const TAU_S = 6 * 3600;
-    const decayed = prevPeak > 0 ? prevPeak * Math.exp(-(nowS - prevTs) / TAU_S) : 0;
-    const nextPeak = Math.max(decayed, Math.max(0, Math.min(1, Number(intensity01) || 0)));
-    glazeGlowByWorker[key] = { peak: nextPeak, ts: nowS };
-    return nextPeak;
-  };
+    const etaS = Number.isFinite(hrThs) && hrThs > 0 && Number.isFinite(netDiff) && netDiff > 0
+      ? (netDiff * Math.pow(2, 32)) / (hrThs * 1e12)
+      : null;
 
-  const phraseStateByWorker = window.__phraseStateByWorker || (window.__phraseStateByWorker = {});
-  const __hashStr = (s) => {
-    const str = String(s || '');
-    let h = 2166136261;
-    for (let i = 0; i < str.length; i++) {
-      h ^= str.charCodeAt(i);
-      h = Math.imul(h, 16777619);
-    }
-    return h >>> 0;
-  };
-  const __pick = (key, bucket, arr) => {
-    const a = Array.isArray(arr) ? arr : [];
-    if (!a.length) return '';
-    const idx = (__hashStr(`${key}::${bucket}`) % a.length) >>> 0;
-    return a[idx];
-  };
-  const pickGlazePhrase = ({ workerKey, workerName, workerThs, luckPct, hype01, glow01, lastAgeS }) => {
-    const wk = String(workerKey || '');
-    const wn = String(workerName || '');
-    const now = Date.now();
-    // 3m cadence with per-worker jitter so all workers don't update at once.
-    const jitterMs = __hashStr(`${wk}::phrase`) % (2 * 60000);
-    const bucket = Math.floor((now + jitterMs) / (3 * 60000));
+    const oddsSeconds = 7 * 86400;
+    const odds = etaS && etaS > 0 ? (1 - Math.exp(-oddsSeconds / etaS)) * 100 : null;
+    const oddsText = Number.isFinite(odds)
+      ? `${formatSmallPercent(odds)} in 7 days`
+      : '-';
 
-    const stale = Number.isFinite(lastAgeS) ? Number(lastAgeS) : null;
-    const isStale = stale != null && stale > 90;
-    const isVeryStale = stale != null && stale > 600;
-    const isSpike = Number(hype01 || 0) > 0.35;
-    const isRecordGlow = Number(glow01 || 0) > 0.18;
+    const workerKey = `${payout || ''}::${name || ''}`.trim();
 
-    let tag = 'chill';
-    if (isVeryStale) tag = 'sleep';
-    else if (isStale) tag = 'idle';
-    else if (isSpike && isRecordGlow) tag = 'party';
-    else if (isSpike) tag = 'spike';
-    else if (isRecordGlow) tag = 'glow';
+    const payoutShort = payout
+      ? (payout.length > 26 ? `${payout.slice(0, 12)}…${payout.slice(-8)}` : payout)
+      : '';
 
-    const prev = phraseStateByWorker[wk];
-    const prevTag = prev && prev.tag ? String(prev.tag) : '';
-    const prevBucket = prev && Number.isFinite(prev.bucket) ? Number(prev.bucket) : null;
-    // Keep vibes stable: only change every ~6m unless the state changes (tag flip).
-    if (prev && prevTag === tag && prevBucket != null && bucket - prevBucket < 2 && prev.phrase) return prev.phrase;
-    if (prev && prevTag === tag && prevBucket === bucket && prev.phrase) return prev.phrase;
-
-    const ths = Number(workerThs || 0);
-    const lucky = Number(luckPct || 0);
-    const baseVars = {
-      wn,
-      ths: Number.isFinite(ths) && ths > 0 ? `${ths.toFixed(ths < 10 ? 2 : 1)} TH/s` : '',
-      odds: Number.isFinite(lucky) ? `${formatSmallPercent(lucky)} in ${oddsWindow.label}` : '',
-    };
-    const fmt = (s) =>
-      String(s || '')
-        .replace(/\{wn\}/g, baseVars.wn || 'worker')
-        .replace(/\{ths\}/g, baseVars.ths || 'hashrate')
-        .replace(/\{odds\}/g, baseVars.odds || 'odds');
-
-    const phrases = {
-      chill: [
-        'Glaze is vibing',
-        'Sprinkles standing by',
-        'Oven is warm',
-        'Just donut things',
-        'Glaze level: acceptable',
-        'Waiting for lightning',
-        'Keep stirring the batter',
-        'Do not anger the RNG',
-        'Glaze is optimistic today',
-        'No prophecy, just vibes',
-      ],
-      idle: [
-        'Glaze cooling down',
-        'Quiet kitchen...',
-        'Sprinkles taking a break',
-        'Waiting on fresh shares',
-        'Still breathing, promise',
-        'Glaze: low activity mode',
-        'RNG is browsing memes',
-      ],
-      sleep: [
-        'Glaze is asleep',
-        'No shares? No glaze.',
-        'Wake me when it hits',
-        'Donut went AFK',
-        'Sprinkles fell off',
-      ],
-      spike: [
-        'Glaze spike detected',
-        'Sprinkles deployed',
-        'That share had spice',
-        'Ooh, that was crunchy',
-        'Glaze just twitched',
-        'Fresh crumbs on the floor',
-        'RNG blinked',
-      ],
-      glow: [
-        'Record glow lingering',
-        'Donut remembers that one',
-        'Glaze is feeling brave',
-        'That record still slaps',
-        'Confidence rising',
-      ],
-      party: [
-        'RNG is dancing',
-        'Sprinkle party!',
-        'Glaze is unhinged',
-        'Kitchen is on fire (in a good way)',
-        'Double sprinkle event',
-        'Donut screaming internally',
-      ],
-    };
-
-    const phrase = fmt(__pick(`${wk}::${tag}::${wn}`, bucket, phrases[tag] || phrases.chill));
-    phraseStateByWorker[wk] = { phrase, tag, bucket };
-    return phrase;
-  };
-
-  const updateDecayedPeak = (key, current) => {
-    const nowS = Date.now() / 1000;
-    const cur = Number(current);
-    const prev = glazeHypeByWorker[key];
-    const prevPeak = prev && Number.isFinite(prev.peak) ? Number(prev.peak) : 0;
-    const prevTs = prev && Number.isFinite(prev.ts) ? Number(prev.ts) : nowS;
-    // Fast decay so it feels "alive" while still being honest.
-    // This is purely for the Glaze ring animation; it does not affect the Record metrics.
-    const TAU_S = 90;
-    const decayed = prevPeak > 0 ? prevPeak * Math.exp(-(nowS - prevTs) / TAU_S) : 0;
-    const nextPeak = Number.isFinite(cur) && cur > 0 ? Math.max(cur, decayed) : decayed;
-    glazeHypeByWorker[key] = { peak: nextPeak, ts: nowS };
-    return nextPeak;
-  };
-
-  const glazeLevelByWorker = window.__glazeLevelByWorker || (window.__glazeLevelByWorker = {});
-  const updateGlazeLevel = ({
-    workerKey,
-    target,
-    workerThs,
-    bestSinceNum,
-    lastDiffNum,
-    lastAgeS,
-    hype01,
-    glow01,
-    recordBroke,
-    hashSharePct,
-    sharesCount,
-  }) => {
-    const nowS = Date.now() / 1000;
-    const prev = glazeLevelByWorker[workerKey];
-    const prevLevel = prev && Number.isFinite(prev.level) ? Number(prev.level) : 0.52;
-    const prevTs = prev && Number.isFinite(prev.ts) ? Number(prev.ts) : nowS;
-    const dt = Math.max(0, Math.min(5, nowS - prevTs));
-
-    const t = Number(target);
-    const record = Number(bestSinceNum);
-    const last = Number(lastDiffNum);
-    const ths = Number(workerThs);
-    const age = Number(lastAgeS);
-    const shares = Number(sharesCount);
-
-    const recordRatio = Number.isFinite(t) && t > 0 && Number.isFinite(record) && record > 0 ? Math.min(1, record / t) : 0;
-    const lastRatio = Number.isFinite(t) && t > 0 && Number.isFinite(last) && last > 0 ? Math.min(1, last / t) : 0;
-
-    // Keep the donut lively and different per worker (fun only):
-    // - Baseline differs per worker (seeded)
-    // - Spikes hard on record breaks and big share events
-    // - Drops fast on staleness / inactivity
-    // - Adds subtle oscillation so workers don't "move in sync"
-    const seed01 = __hashStr(workerKey) / 0xffffffff;
-    const workerBias = (seed01 - 0.5) * 0.22;
-
-    const stale = Number.isFinite(age) && age > 0 ? Math.max(0, Math.min(1, (age - 10) / 140)) : 0;
-    const cool = 1 - stale * 0.60;
-
-    const energy = Number.isFinite(ths) && ths > 0 ? Math.max(0, Math.min(1, Math.log10(1 + ths) / 3)) : 0;
-    const shareOfPool = Number.isFinite(hashSharePct) ? Math.max(0, Math.min(1, Number(hashSharePct) / 100)) : 0;
-    const hype = Math.max(0, Math.min(1, Number(hype01) || 0));
-    const glow = Math.max(0, Math.min(1, Number(glow01) || 0));
-    const broke = recordBroke ? 0.38 : 0;
-
-    // Baseline around 50%: glaze should feel "alive" (go up and down), not sit near 0.
-    const base =
-      0.52 +
-      (0.12 * energy) +
-      (0.10 * Math.sqrt(Math.max(0, shareOfPool))) +
-      workerBias;
-
-    // Worker-specific oscillation (keeps workers from looking identical).
-    const oscA = Math.sin((nowS / 7.5) + (seed01 * 6.28318));
-    const oscB = Math.sin((nowS / 2.6) + (seed01 * 11.9));
-    const osc = (oscA * (0.045 + 0.06 * energy)) + (oscB * (0.02 + 0.03 * shareOfPool));
-
-    // Small wobble scaled by activity (random-ish, but deterministic).
-    const wobbleSeed = __hashStr(`${workerKey}::${Math.floor(nowS * 1.6)}`) / 0xffffffff;
-    const wobble = (wobbleSeed - 0.5) * (0.10 + 0.20 * Math.max(hype, shareOfPool, energy));
-
-    // "Lots of tiny shares" can cool the glaze a bit: frequent updates with very low ratio.
-    const tinySpam = Number.isFinite(age) && age > 0 && age < 25 && lastRatio > 0 && lastRatio < 1e-7 ? 0.14 : 0;
-
-    // "Two good shares in a row" boost: consecutive last-diff improvements in a short window.
-    // This is intentionally playful; it only drives the donut ring.
-    const prevLast = Number(prevLastByWorker[workerKey] || 0);
-    const upTick = Number.isFinite(last) && last > 0 && Number.isFinite(prevLast) && prevLast > 0 ? last / prevLast : 0;
-    const consecutiveBoost = upTick > 1.35 && Number.isFinite(age) && age >= 0 && age < 75 ? Math.min(0.34, 0.12 + (Math.log10(upTick) * 0.26)) : 0;
-
-    const prevHr = Number(prevHrByWorker[workerKey] || 0);
-    const hrTick = Number.isFinite(ths) && ths > 0 && Number.isFinite(prevHr) && prevHr > 0 ? ths / prevHr : 1;
-    const hrBoost = hrTick > 1.25 ? 0.16 : hrTick > 1.15 ? 0.10 : hrTick > 1.08 ? 0.06 : 0;
-    const hrCool = hrTick < 0.75 ? 0.14 : hrTick < 0.88 ? 0.08 : 0;
-
-    // Compare last share to its own recent baseline (EMA in log-space).
-    const logLast = Number.isFinite(last) && last > 0 ? Math.log10(last) : null;
-    const emaPrev = glazeEmaByWorker[workerKey];
-    const emaPrevVal = emaPrev && Number.isFinite(emaPrev.v) ? Number(emaPrev.v) : (logLast != null ? logLast : 0);
-    const emaAlpha = Math.max(0.04, Math.min(0.35, (dt / 2.2)));
-    const emaNextVal = logLast != null ? (emaPrevVal + (logLast - emaPrevVal) * emaAlpha) : emaPrevVal;
-    glazeEmaByWorker[workerKey] = { v: emaNextVal, ts: nowS };
-    const dev = logLast != null ? Math.max(-1, Math.min(1, (logLast - emaNextVal) / 1.45)) : 0;
-
-    // Share counter rate (rough activity proxy).
-    const sharePrev = glazeShareStateByWorker[workerKey];
-    const prevShares = sharePrev && Number.isFinite(sharePrev.s) ? Number(sharePrev.s) : (Number.isFinite(shares) ? shares : 0);
-    const prevShareTs = sharePrev && Number.isFinite(sharePrev.ts) ? Number(sharePrev.ts) : nowS;
-    const dShares = Number.isFinite(shares) && shares >= 0 ? Math.max(0, shares - prevShares) : 0;
-    const dtShares = Math.max(1e-3, Math.min(30, nowS - prevShareTs));
-    const shareRate = dShares / dtShares;
-    const rateEmaPrev = sharePrev && Number.isFinite(sharePrev.r) ? Number(sharePrev.r) : shareRate;
-    const rateEma = rateEmaPrev + (shareRate - rateEmaPrev) * Math.max(0.04, Math.min(0.5, dtShares / 8));
-    glazeShareStateByWorker[workerKey] = { s: Number.isFinite(shares) ? shares : prevShares, ts: nowS, r: rateEma };
-    const rate01 = Math.max(0, Math.min(1, Math.log10(1 + rateEma) / 4));
-
-    // If we are hammering shares but they're all tiny, nudge glaze down a bit.
-    const spamPenalty = rate01 > 0.55 && lastRatio > 0 && lastRatio < 1e-7 ? 0.12 : 0;
-
-    // If the miner is totally quiet, glaze should drop quickly.
-    const quietPenalty = (Number.isFinite(age) && age > 0 && age > 140) ? 0.28 : (Number.isFinite(age) && age > 0 && age > 70) ? 0.14 : 0;
-    const activityBoost = rate01 > 0.5 ? 0.10 : rate01 > 0.25 ? 0.06 : rate01 > 0.08 ? 0.03 : 0;
-
-    const targetLevel = Math.max(
-      0.05,
-      Math.min(
-        0.98,
-        (base +
-          (dev * 0.28) +
-          (recordRatio > 0 ? Math.pow(recordRatio, 0.22) * 0.22 : 0) +
-          (hype * 0.26) +
-          (glow * 0.16) +
-          activityBoost +
-          hrBoost -
-          hrCool +
-          consecutiveBoost +
-          broke +
-          osc +
-          wobble -
-          tinySpam -
-          spamPenalty -
-          quietPenalty) *
-          (0.82 + 0.18 * energy) *
-          cool
-      )
-    );
-    // Make spikes feel responsive, and staleness drop quickly.
-    const alphaFloor = 0.20;
-    const spikeFast = recordBroke ? 0.75 : hype > 0.55 ? 0.62 : hype > 0.38 ? 0.42 : 0;
-    const staleFast = (Number.isFinite(age) && age > 180) ? 0.70 : (Number.isFinite(age) && age > 90) ? 0.45 : 0;
-    const baseAlpha = (0.20 + 0.44 * Math.max(hype, rate01) + glow * 0.22) * (dt / 0.95);
-    const alphaUp = Math.max(alphaFloor, Math.min(0.92, baseAlpha + spikeFast));
-    const alphaDown = Math.max(alphaFloor, Math.min(0.92, baseAlpha + staleFast));
-    const alpha = targetLevel >= prevLevel ? alphaUp : alphaDown;
-    const next = prevLevel + (targetLevel - prevLevel) * alpha;
-    glazeLevelByWorker[workerKey] = { level: next, ts: nowS };
-
-    // Export lightweight explanation for the vibe card (throttled).
-    try {
-      const nextTag = (() => {
-        const st = Number.isFinite(age) ? Number(age) : null;
-        const isStale2 = st != null && st > 90;
-        const isVeryStale2 = st != null && st > 600;
-        const isSpike2 = hype > 0.35;
-        const isGlow2 = glow > 0.18;
-        if (isVeryStale2) return 'sleep';
-        if (isStale2) return 'idle';
-        if (isSpike2 && isGlow2) return 'party';
-        if (isSpike2) return 'spike';
-        if (isGlow2) return 'glow';
-        return 'chill';
-      })();
-
-      const signals = [];
-      if (recordBroke) signals.push('record+');
-      if (hype > 0.35) signals.push('spike');
-      if (glow > 0.18) signals.push('glow');
-      if (Number.isFinite(age) && age > 120) signals.push('stale');
-      if (hrTick > 1.2) signals.push('hr+');
-      else if (hrTick < 0.8) signals.push('hr-');
-      if (spamPenalty > 0.05 || tinySpam > 0.05) signals.push('spam');
-      if (!signals.length && rate01 > 0.25) signals.push('steady');
-      if (!signals.length && Number.isFinite(age) && age > 0 && age > 60) signals.push('quiet');
-
-      const explain = [];
-      if (recordBroke) explain.push('new record');
-      if (hype > 0.35) explain.push('big shares');
-      if (Number.isFinite(age) && age > 120) explain.push('no recent shares');
-      else if (Number.isFinite(age) && age > 60) explain.push('slowing down');
-      if (hrTick > 1.2) explain.push('hashrate up');
-      else if (hrTick < 0.8) explain.push('hashrate down');
-      if (spamPenalty > 0.05 || tinySpam > 0.05) explain.push('tiny share spam');
-
-      const prevMeta = glazeMetaByWorker[workerKey];
-      const prevMetaTs = prevMeta && Number.isFinite(prevMeta.ts) ? Number(prevMeta.ts) : 0;
-      const prevMetaTag = prevMeta && prevMeta.tag ? String(prevMeta.tag) : '';
-      const holdJitterS = (seed01 * 60);
-      const holdS = 120 + holdJitterS; // 2–3 minutes per worker (keeps it readable, not spammy)
-      const shouldUpdate =
-        recordBroke ||
-        prevMetaTag !== nextTag ||
-        !prevMetaTs ||
-        (nowS - prevMetaTs) >= holdS;
-
-      if (shouldUpdate) {
-        glazeMetaByWorker[workerKey] = {
-          tag: nextTag,
-          ts: nowS,
-          signals: signals.slice(0, 3),
-          explain: explain.slice(0, 2),
-          activity01: rate01,
-          staleS: Number.isFinite(age) ? age : null,
-        };
-      }
-    } catch {}
-
-    return Math.max(0, Math.min(1, next));
-  };
-
-  const showWorkerResetModal = async ({ workerKey, workerName }) => {
-    const wk = String(workerKey || '').trim();
-    const wn = String(workerName || '').trim();
-    if (!wk || !wn) return;
-
-    const choice = await showActionModal({
-      kicker: 'Worker',
-      title: `Reset ${wn}?`,
-      bodyHtml: `Choose what to reset:<br><br>
-        <span class="text-slate-100 font-semibold">Reset glaze</span> resets the donut animations only.<br>
-        <span class="text-slate-100 font-semibold">Reset record</span> clears this worker's <span class="text-slate-100 font-semibold">record since block</span> so it starts fresh.`,
-      primaryText: 'Reset record',
-      secondaryText: 'Reset glaze',
-    });
-
-    if (choice === 'secondary') {
-      clearGlazeForWorker(wk);
-      renderWorkerDetails(window.__lastWorkers || []);
-      return;
-    }
-
-    if (choice !== 'primary') return;
-
-    const confirm = await showActionModal({
-      kicker: 'Confirm',
-      title: `Reset record for ${wn}?`,
-      bodyHtml: `This resets <span class="text-slate-100 font-semibold">record since block</span> for this worker only.<br><br>
-        It does <span class="text-slate-100 font-semibold">not</span> affect mining, payouts, or your node.`,
-      primaryText: 'Reset record',
-      secondaryText: 'Cancel',
-    });
-    if (confirm !== 'primary') return;
-
-    try {
-      await postJson('/api/pool/workers/bestshare/reset', { worker: wn });
-      clearGlazeForWorker(wk);
-      try {
-        delete bestByWorker[wk];
-      } catch {}
-      const w = await fetchJson('/api/pool/workers');
-      const miners = w && Array.isArray(w.workers_details) ? w.workers_details : [];
-      renderWorkerDetails(miners);
-    } catch (e) {
-      console.error(e);
-      await showActionModal({
-        kicker: 'Error',
-        title: 'Reset failed',
-        bodyHtml: escapeHtml(String(e && e.message ? e.message : e)),
-        primaryText: 'OK',
-      });
-    }
-  };
-
-  for (const m of sortedVisible.slice(0, 50)) {
-    const workerNameRaw = (m && (m.workername || m.workerName || m.worker)) ? String(m.workername || m.workerName || m.worker) : '';
-    const base = (window.__payoutAddress || '').trim() || (m && m.miner ? String(m.miner).trim() : '');
-    const split = splitWorker(workerNameRaw, base);
-    const workerName = split.name;
-    const workerBase = split.base;
-	    const sub = workerBase ? shortenMiner(workerBase) : '';
-	    const hrThs = m.hashrate_1m_ths != null ? m.hashrate_1m_ths : m.hashrate_ths;
-	    const hr = formatHashrateFromTHS(hrThs);
-	    const last = formatAge(m.lastshare != null ? m.lastshare : m.lastShare);
-	    const bestSinceNum = m && (m.bestshare_since_block ?? m.bestShareSinceBlock) != null ? Number(m.bestshare_since_block ?? m.bestShareSinceBlock) : null;
-      const lastDiffNum = m && (m.current_diff ?? m.currentDiff) != null ? Number(m.current_diff ?? m.currentDiff) : null;
-	    const bestSinceText = Number.isFinite(bestSinceNum) && bestSinceNum > 0 ? formatBestShare(bestSinceNum) : '-';
-	    const bestPct = pctVsTarget(bestSinceNum);
-	    const bestOver = Number.isFinite(netDiff) && netDiff > 0 && Number.isFinite(bestSinceNum) && bestSinceNum > netDiff;
-	    const bestLinearPct = Number.isFinite(netDiff) && netDiff > 0 && Number.isFinite(bestSinceNum) && bestSinceNum > 0 ? (bestSinceNum / netDiff) * 100 : null;
-	    const bestLinearText = bestLinearPct != null ? `${formatSmallPercent(bestLinearPct)} of target` : 'Log scale';
-	    const targetText = Number.isFinite(netDiff) && netDiff > 0 ? formatBestShare(netDiff) : '-';
-      const workerThs = Number(hrThs);
-      const poolThs = sortedVisible.reduce((acc, mm) => {
-        const v = Number(mm.hashrate_1m_ths != null ? mm.hashrate_1m_ths : mm.hashrate_ths);
-        return Number.isFinite(v) && v > 0 ? acc + v : acc;
-      }, 0);
-      const hashSharePct = Number.isFinite(workerThs) && workerThs > 0 && Number.isFinite(poolThs) && poolThs > 0 ? (workerThs / poolThs) * 100 : null;
-
-      const formatEtaS = (s) => {
-        const n = Number(s);
-        if (!Number.isFinite(n) || n <= 0) return '-';
-        const sec = Math.round(n);
-        const m = Math.floor(sec / 60);
-        const h = Math.floor(m / 60);
-        const d = Math.floor(h / 24);
-        if (d > 0) return `${d}d ${h % 24}h`;
-        if (h > 0) return `${h}h ${m % 60}m`;
-        if (m > 0) return `${m}m`;
-        return `${sec}s`;
-      };
-      const etaS = Number.isFinite(workerThs) && workerThs > 0 && Number.isFinite(netDiff) && netDiff > 0 ? (netDiff * Math.pow(2, 32)) / (workerThs * 1e12) : null;
-      const etaText = etaS != null ? formatEtaS(etaS) : '-';
-
-      const luckFrac = etaS != null && etaS > 0 ? 1 - Math.exp(-oddsWindow.s / etaS) : 0;
-      const luckPct = luckFrac * 100;
-      const luckText = etaS != null && etaS > 0 ? formatSmallPercent(luckPct) : '-';
-
-      const workerKey = `${workerBase || ''}::${workerName || ''}`.trim();
-      const target = Number.isFinite(netDiff) && netDiff > 0 ? netDiff : maxBestSince;
-      const decayedPeak = updateDecayedPeak(workerKey, lastDiffNum);
-      const targetForHype = Number.isFinite(target) && target > 0 ? target : null;
-      const hypeRatio = targetForHype && Number.isFinite(decayedPeak) && decayedPeak > 0 ? Math.min(1, decayedPeak / targetForHype) : 0;
-      const hype01 = Math.max(0, Math.min(1, Math.log10(1 + hypeRatio * 1e6) / 6));
-
-      const recordRatioRaw = Number.isFinite(bestSinceNum) && bestSinceNum > 0 && Number.isFinite(target) && target > 0 ? bestSinceNum / target : 0;
-      const recordRatio = Math.max(0, Math.min(1, Number(recordRatioRaw) || 0));
-      const baseRingPct = scaleLuckForRing(luckFrac) * 100;
-      // Glow intensity rises with the record ratio, but only updates (spikes) when a new record is set.
-      const prevBest = Number(bestByWorker[workerKey] || 0);
-      const bestNow = Number.isFinite(bestSinceNum) && bestSinceNum > 0 ? bestSinceNum : 0;
-      const recordBroke = bestNow > 0 && bestNow > prevBest * 1.000001;
-      const glowAmp = recordBroke ? Math.max(0.15, Math.min(1, Math.pow(recordRatio || 0, 0.25))) : 0;
-      const glow01 = updateGlow(workerKey, glowAmp);
-      const lastAgeS = m && (m.lastshare_ago_s != null ? Number(m.lastshare_ago_s) : null);
-
-      // Donut Glaze-o-meter: intentionally "fun" and responsive (not the true 7d odds).
-      const glaze01 = updateGlazeLevel({
-        workerKey,
-        target,
-        workerThs,
-        bestSinceNum,
-        lastDiffNum,
-        lastAgeS,
-        hype01,
-        glow01,
-        recordBroke,
-        hashSharePct,
-        sharesCount: m && m.shares != null ? Number(m.shares) : null,
-      });
-      const glazePct = Math.max(0, Math.min(100, glaze01 * 100));
-      const glazeText = `${Math.round(glazePct)}%`;
-      const isStale = Number.isFinite(lastAgeS) && Number(lastAgeS) > 90;
-      const isVeryStale = Number.isFinite(lastAgeS) && Number(lastAgeS) > 600;
-      const isSpike = Number(hype01 || 0) > 0.35;
-      const isGlow = Number(glow01 || 0) > 0.18;
-      let tag = 'chill';
-      if (isVeryStale) tag = 'sleep';
-      else if (isStale) tag = 'idle';
-      else if (isSpike && isGlow) tag = 'party';
-      else if (isSpike) tag = 'spike';
-      else if (isGlow) tag = 'glow';
-
-      const accentByTag = {
-        chill: 'rgba(255,43,214,.96)',
-        spike: 'rgba(255,154,0,.98)',
-        glow: 'rgba(168,85,247,.96)',
-        party: 'rgba(255,43,214,.98)',
-        idle: 'rgba(0,229,255,.92)',
-        sleep: 'rgba(148,163,184,.70)',
-      };
-      const accent = accentByTag[tag] || 'rgba(255,43,214,.96)';
-      const spr = Math.max(
-        0.15,
-        Math.min(1, 0.35 + 0.55 * Math.max(Number(hype01) || 0, Number(glow01) || 0) + (recordBroke ? 0.25 : 0))
-      );
-
-      const pulse = bestNow > 0 && bestNow > prevBest * 1.000001;
-      if (bestNow > 0) bestByWorker[workerKey] = bestNow;
-
-      const phrase = pickGlazePhrase({
-        workerKey,
-        workerName,
-        workerThs,
-        luckPct,
-        hype01,
-        glow01,
-        lastAgeS,
-      });
-      const meta = (window.__glazeMetaByWorker && window.__glazeMetaByWorker[workerKey]) ? window.__glazeMetaByWorker[workerKey] : null;
-      const signalsText = meta && Array.isArray(meta.signals) && meta.signals.length ? `Signals: ${meta.signals.join(' ')}` : '';
-      const explainText = meta && Array.isArray(meta.explain) && meta.explain.length ? `Why: ${meta.explain.join(', ')}` : '';
-
-      const mid = `
-        <div class="axe-worker-mid">
-          <div class="axe-worker-mid__k">ODDS</div>
-          <div class="axe-worker-mid__v">${escapeHtml(etaS != null && etaS > 0 ? `${luckText} in ${oddsWindow.label}` : '-')}</div>
+    const card = document.createElement('article');
+    card.className = `miner-worker-card${isActive ? ' is-active' : ' is-inactive'}`;
+    card.innerHTML = `
+      <div class="miner-worker-top">
+        <div class="miner-worker-identity">
+          <span class="miner-worker-dot"></span>
+          <div class="miner-worker-title-wrap">
+            <h3>${escapeHtml(name)}</h3>
+            ${payoutShort ? `<div class="miner-worker-payout" title="${escapeHtml(payout)}">${escapeHtml(payoutShort)}</div>` : ''}
+          </div>
         </div>
-      `;
-
-      prevLastByWorker[workerKey] = Number.isFinite(lastDiffNum) && lastDiffNum > 0 ? lastDiffNum : prevLastByWorker[workerKey];
-      prevHrByWorker[workerKey] = Number.isFinite(workerThs) && workerThs > 0 ? workerThs : prevHrByWorker[workerKey];
-
-    const left = `
-      <div class="min-w-0">
-        <div class="truncate font-mono text-white axe-shadow-heavy axe-worker-name">${escapeHtml(workerName)}</div>
-        ${sub ? `<div class="truncate font-mono text-[11px] text-slate-400">${escapeHtml(sub)}</div>` : ''}
+        <span class="miner-worker-badge">${isActive ? 'ACTIVE' : 'INACTIVE'}</span>
       </div>
-    `;
 
-	    const right = `
-	      <div class="text-right">
-	        <div class="font-mono text-sm text-white axe-shadow-heavy">${escapeHtml(hr)}</div>
-	        <div class="font-mono text-[11px] text-slate-400">${escapeHtml(last)}</div>
-	      </div>
-	    `;
-
-    const metrics = `
-      <div class="axe-worker-metrics">
-        <div class="axe-worker-donuts">
-           <div class="axe-worker-donut" title="Glaze-o-meter: fun only. Jumps with share spikes, record glow, and activity. Not a prediction.">
-             <div class="axe-donut axe-donut--luck${pulse ? ' axe-donut--pulse' : ''}" style="--p:${escapeHtml((Math.max(0, Math.min(100, glazePct)) * 3.6).toFixed(2))};--axe-glaze:${escapeHtml(accent)};--spr:${escapeHtml(spr.toFixed(2))}">
-                <div class="axe-donut__meter"></div>
-              </div>
-            </div>
-            <div class="axe-vibe-card">
-              <div class="axe-vibe-card__k">Donut-O-Meter</div>
-              <div class="axe-vibe-card__v">Glaze ${escapeHtml(glazeText)}</div>
-              ${signalsText ? `<div class=\"axe-vibe-card__s\">${escapeHtml(signalsText)}</div>` : ''}
-              ${explainText ? `<div class=\"axe-vibe-card__s\">${escapeHtml(explainText)}</div>` : ''}
-              <div class="axe-vibe-card__m">${escapeHtml(phrase)}</div>
-            </div>
-          </div>
-        <div class="axe-worker-tracks">
-          <div class="axe-worker-tracks__meta">
-            <div class="axe-worker-tracks__hint">Log scale</div>
-            <div class="axe-worker-tracks__hint">Target ${escapeHtml(targetText)}</div>
-          </div>
-          <div class="axe-worker-track-row">
-            <div class="axe-worker-track-row__label">Record</div>
-            <div class="axe-worker-track axe-worker-track--best${bestOver ? ' axe-worker-track--over' : ''}" title="Record share since block vs current network difficulty (log scale)">
-              <div class="axe-worker-track__mask" style="left:${bestPct.toFixed(2)}%"></div>
-              <div class="axe-worker-track__marker" style="left:${bestPct.toFixed(2)}%" aria-hidden="true"></div>
-              <div class="axe-worker-track__coin" aria-hidden="true"></div>
-            </div>
-          </div>
+      <div class="miner-worker-metrics">
+        <div class="miner-stat">
+          <span>Hashrate</span>
+          <strong>${escapeHtml(hrText)}</strong>
+          <small>${escapeHtml(ageText(ageS))}</small>
         </div>
-        <div class="axe-worker-metric axe-worker-metric--best" title="Record share since block">
-          <div class="axe-worker-metric__label">Record</div>
-          <div class="axe-worker-metric__value">${escapeHtml(bestSinceText)}</div>
-          <div class="axe-worker-metric__sub">${escapeHtml(bestLinearText)}</div>
-          <button type="button" class="axe-worker-metric__pill axe-worker-metric__pill--reset js-worker-reset" data-worker-key="${escapeHtml(workerKey)}" data-worker-name="${escapeHtml(workerName)}">Reset...</button>
+
+        <div class="miner-stat">
+          <span>Best / Record</span>
+          <strong class="green">${escapeHtml(bestText)}</strong>
+          <small>${linearPct > 100 ? 'Target exceeded' : 'Current record'}</small>
+        </div>
+
+        <div class="miner-stat">
+          <span>Target</span>
+          <strong>${escapeHtml(targetText)}</strong>
+          <small>Network difficulty</small>
+        </div>
+
+        <div class="miner-stat">
+          <span>Record Progress</span>
+          <strong class="blue">${escapeHtml(formatSmallPercent(linearPct))}</strong>
+          <small>${escapeHtml(bestText)} of ${escapeHtml(targetText)}</small>
+        </div>
+
+        <div class="miner-stat">
+          <span>Odds</span>
+          <strong>${escapeHtml(oddsText === '-' ? '-' : oddsText.split(' in ')[0])}</strong>
+          <small>${escapeHtml(oddsText === '-' ? '7 day window' : `in ${oddsText.split(' in ')[1]}`)}</small>
+        </div>
+      </div>
+
+      <div class="miner-progress-panel">
+        <div class="miner-progress-head">
+          <div>
+            <h4>Record Progress</h4>
+            <p><span>${escapeHtml(bestText)}</span> of ${escapeHtml(targetText)}</p>
+          </div>
+          <b>${escapeHtml(formatSmallPercent(linearPct))}</b>
+        </div>
+
+        <div class="miner-progress-track">
+          <div class="miner-progress-fill" style="width:${cappedPct.toFixed(2)}%"></div>
+        </div>
+
+        <div class="miner-worker-footer">
+          <div class="miner-worker-details">
+            <div><span>Status</span><b>${isActive ? 'Receiving shares' : 'No recent shares'}</b></div>
+            <div><span>Last share</span><b>${escapeHtml(ageText(ageS))}</b></div>
+          </div>
+
+          <div class="miner-worker-details">
+            <div><span>Target</span><b>${escapeHtml(targetText)}</b></div>
+            <div><span>Record</span><b>${escapeHtml(bestText)}</b></div>
+          </div>
+
+          <button type="button"
+                  class="miner-reset-button js-worker-reset"
+                  data-worker-key="${escapeHtml(workerKey)}"
+                  data-worker-name="${escapeHtml(name)}">
+            ↻ Reset Worker Record
+          </button>
         </div>
       </div>
     `;
 
-    const el = document.createElement('div');
-    el.className = 'axe-worker-item px-3 py-2';
-    el.innerHTML = `<div class="axe-worker-head flex items-center justify-between gap-3">${left}${mid}${right}</div>${metrics}`;
-    if (Number(hype01 || 0) > 0.25 || recordBroke) el.querySelector('.axe-donut--luck')?.classList.add('axe-donut--sprinkle');
-    rows.appendChild(el);
-  }
+    rows.appendChild(card);
+  });
 
   rows.onclick = (ev) => {
-    const t = ev && ev.target;
-    if (!t) return;
-    const btn = t.closest ? t.closest('.js-worker-reset') : null;
+    const btn = ev?.target?.closest?.('.js-worker-reset');
     if (!btn) return;
     ev.preventDefault();
     ev.stopPropagation();
-    const wk = btn.getAttribute('data-worker-key') || '';
-    const wn = btn.getAttribute('data-worker-name') || '';
-    showWorkerResetModal({ workerKey: wk, workerName: wn });
+    showWorkerResetModal({
+      workerKey: btn.getAttribute('data-worker-key') || '',
+      workerName: btn.getAttribute('data-worker-name') || ''
+    });
   };
 
-  if (sortedVisible.length > 50) {
+  if (visible.length > 50) {
     const more = document.createElement('div');
-    more.className = 'px-3 py-2 text-xs text-slate-400';
-    more.textContent = `Showing first 50 of ${sortedVisible.length}.`;
+    more.className = 'muted small miners-more';
+    more.textContent = `Showing first 50 of ${visible.length} workers.`;
     rows.appendChild(more);
   }
 }
@@ -3094,3 +2520,11 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 setInterval(() => { try { refreshConnectInfo(); } catch {} }, 15000);
+
+
+document.getElementById('refreshWorkersNow')?.addEventListener('click', async () => {
+  try {
+    await refresh();
+  } catch {}
+});
+

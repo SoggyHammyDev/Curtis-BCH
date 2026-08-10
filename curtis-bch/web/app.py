@@ -65,7 +65,7 @@ SUPPORT_CHECKIN_URL = _env_or_default("SUPPORT_CHECKIN_URL", f"{DEFAULT_SUPPORT_
 SUPPORT_TICKET_URL = _env_or_default("SUPPORT_TICKET_URL", f"{DEFAULT_SUPPORT_BASE_URL}/api/support/upload")
 
 APP_ID = "curtis-bch"
-APP_VERSION = os.getenv("APP_VERSION", "0.1.9").strip() or "0.1.9"
+APP_VERSION = os.getenv("APP_VERSION", "0.1.10").strip() or "0.1.10"
 APP_VERSION_SUFFIX = os.getenv("APP_VERSION_SUFFIX", "").strip()
 DISPLAY_VERSION = f"{APP_VERSION}{APP_VERSION_SUFFIX}"
 

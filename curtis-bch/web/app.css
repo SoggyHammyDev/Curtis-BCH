@@ -20,3 +20,282 @@ html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-f
 .connect-field code { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding-right:58px; }
 .copy-mini { position:absolute; right:8px; bottom:8px; padding:6px 9px; font-size:11px; }
 @media (max-width:850px) { .connect-grid { grid-template-columns:1fr; } }
+
+
+/* Curtis BCH 0.1.10 — Miners redesign */
+.miners-page-head {
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-end;
+  gap:24px;
+  margin-bottom:24px;
+}
+.miners-page-head h2 {
+  margin:4px 0 4px;
+  font-size:30px;
+}
+.miners-active-count {
+  margin:0;
+  color:#31e98b;
+  font-size:15px;
+}
+.miners-head-actions {
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:14px;
+  flex-wrap:wrap;
+}
+.miners-auto {
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  color:var(--text);
+  font-size:13px;
+}
+.miners-live-dot {
+  width:9px;
+  height:9px;
+  border-radius:50%;
+  background:#31e98b;
+  box-shadow:0 0 16px rgba(49,233,139,.8);
+}
+.miners-worker-list {
+  display:grid;
+  gap:20px;
+}
+.miner-worker-card {
+  border:1px solid rgba(49,233,139,.45);
+  border-radius:16px;
+  padding:24px;
+  background:linear-gradient(180deg,rgba(15,28,24,.86),rgba(9,17,15,.92));
+  box-shadow:0 12px 40px rgba(0,0,0,.20);
+}
+.miner-worker-card.is-inactive {
+  border-color:rgba(148,163,184,.24);
+  opacity:.82;
+}
+.miner-worker-top {
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:18px;
+}
+.miner-worker-identity {
+  display:flex;
+  gap:14px;
+  align-items:flex-start;
+  min-width:0;
+}
+.miner-worker-dot {
+  width:18px;
+  height:18px;
+  margin-top:7px;
+  border-radius:50%;
+  background:#31e98b;
+  box-shadow:0 0 20px rgba(49,233,139,.55);
+  flex:0 0 auto;
+}
+.is-inactive .miner-worker-dot {
+  background:#718096;
+  box-shadow:none;
+}
+.miner-worker-title-wrap {
+  min-width:0;
+}
+.miner-worker-title-wrap h3 {
+  margin:0;
+  font-size:26px;
+  line-height:1.1;
+}
+.miner-worker-payout {
+  margin-top:8px;
+  color:#31e98b;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:13px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  max-width:720px;
+}
+.miner-worker-badge {
+  display:inline-flex;
+  align-items:center;
+  padding:8px 12px;
+  border-radius:9px;
+  background:rgba(49,233,139,.12);
+  color:#31e98b;
+  font-weight:800;
+  font-size:12px;
+  letter-spacing:.05em;
+}
+.is-inactive .miner-worker-badge {
+  color:#94a3b8;
+  background:rgba(148,163,184,.10);
+}
+.miner-worker-metrics {
+  display:grid;
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  gap:14px;
+  margin-top:24px;
+}
+.miner-stat {
+  border:1px solid rgba(148,163,184,.16);
+  border-radius:13px;
+  background:rgba(255,255,255,.018);
+  padding:17px;
+  min-width:0;
+}
+.miner-stat > span {
+  display:block;
+  color:#cbd5e1;
+  font-size:13px;
+  margin-bottom:14px;
+}
+.miner-stat strong {
+  display:block;
+  color:#fff;
+  font-size:23px;
+  line-height:1.05;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.miner-stat strong.green { color:#31e98b; }
+.miner-stat strong.blue { color:#64a0ff; }
+.miner-stat small {
+  display:block;
+  color:#94a3b8;
+  margin-top:9px;
+  font-size:12px;
+}
+.miner-progress-panel {
+  margin-top:18px;
+  border:1px solid rgba(148,163,184,.16);
+  border-radius:13px;
+  overflow:hidden;
+  background:rgba(0,0,0,.08);
+}
+.miner-progress-head {
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:16px;
+  padding:20px 20px 14px;
+}
+.miner-progress-head h4 {
+  margin:0 0 7px;
+  font-size:17px;
+}
+.miner-progress-head p {
+  margin:0;
+  color:#cbd5e1;
+  font-size:13px;
+}
+.miner-progress-head p span { color:#31e98b; }
+.miner-progress-head > b {
+  color:#64a0ff;
+  font-size:24px;
+}
+.miner-progress-track {
+  height:14px;
+  margin:0 20px 18px;
+  border-radius:999px;
+  overflow:hidden;
+  background:rgba(148,163,184,.14);
+}
+.miner-progress-fill {
+  height:100%;
+  min-width:0;
+  border-radius:999px;
+  background:linear-gradient(90deg,#31e98b,#20c977);
+  box-shadow:0 0 18px rgba(49,233,139,.25);
+}
+.miner-worker-footer {
+  display:grid;
+  grid-template-columns:1.1fr 1.1fr auto;
+  gap:18px;
+  align-items:center;
+  padding:18px 20px;
+  border-top:1px solid rgba(148,163,184,.12);
+}
+.miner-worker-details {
+  display:grid;
+  gap:9px;
+}
+.miner-worker-details > div {
+  display:flex;
+  gap:8px;
+  align-items:center;
+  font-size:13px;
+}
+.miner-worker-details span {
+  color:#94a3b8;
+  min-width:74px;
+}
+.miner-worker-details b {
+  color:#e2e8f0;
+}
+.miner-reset-button {
+  border:1px solid rgba(255,87,74,.75);
+  background:transparent;
+  color:#ff6255;
+  border-radius:10px;
+  padding:12px 15px;
+  font-weight:800;
+  cursor:pointer;
+  white-space:nowrap;
+}
+.miner-reset-button:hover {
+  background:rgba(255,87,74,.08);
+}
+.miners-about-card {
+  display:flex;
+  gap:14px;
+  align-items:flex-start;
+  margin-top:20px;
+}
+.miners-about-card h3 {
+  margin:0 0 5px;
+  color:#64a0ff;
+  font-size:17px;
+}
+.miners-about-card p {
+  margin:0;
+  color:#aeb8c7;
+  font-size:13px;
+}
+.miners-about-icon {
+  display:grid;
+  place-items:center;
+  width:28px;
+  height:28px;
+  border-radius:50%;
+  background:#64a0ff;
+  color:#07111e;
+  font-weight:900;
+  flex:0 0 auto;
+}
+.miners-empty {
+  color:#94a3b8;
+  text-align:center;
+  padding:28px;
+}
+.miners-more {
+  text-align:center;
+  padding:8px;
+}
+
+@media (max-width: 1180px) {
+  .miner-worker-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .miner-worker-footer { grid-template-columns:1fr 1fr; }
+  .miner-reset-button { grid-column:1 / -1; justify-self:start; }
+}
+@media (max-width: 760px) {
+  .miners-page-head { align-items:flex-start; flex-direction:column; }
+  .miners-head-actions { justify-content:flex-start; }
+  .miner-worker-card { padding:16px; }
+  .miner-worker-metrics { grid-template-columns:1fr; }
+  .miner-worker-footer { grid-template-columns:1fr; }
+  .miner-reset-button { width:100%; }
+  .miner-worker-payout { max-width:74vw; }
+}
