@@ -23,7 +23,7 @@ WORKDIR /src
 RUN git clone --depth 1 https://github.com/ctubio/ckpool.git .
 
 RUN ./autogen.sh && \
-    ./configure && \
+    CFLAGS="-O2 -fcommon" ./configure --without-ckdb && \
     make -j"$(nproc)"
 
 FROM debian:bookworm-slim
