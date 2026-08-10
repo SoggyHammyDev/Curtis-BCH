@@ -2523,6 +2523,7 @@ function shortenImageRef(s) {
 
 async function loadPoolSettings() {
   const status = document.getElementById('pool-settings-status');
+  const modernStatus = document.getElementById('poolSettingsStatus');
   const payoutEl = document.getElementById('payout-address');
   const payoutInput = document.getElementById('payoutAddress');
   const minerUser = document.getElementById('miner-username');
@@ -3051,10 +3052,33 @@ document.addEventListener('DOMContentLoaded', () => {
     modern.addEventListener('input',sync);
   }
 
-  document.getElementById('savePoolSettings')?.addEventListener('click', () => {
-    const modern=document.getElementById('payoutAddress'), legacy=document.getElementById('payout-address');
-    if (modern && legacy) legacy.value=modern.value;
-    document.getElementById('pool-settings-form')?.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));
+  document.getElementById('savePoolSettings')?.addEventListener('click', async () => {
+    const input = document.getElementById('payoutAddress');
+    const status = document.getElementById('poolSettingsStatus');
+    const payoutAddress = String(input?.value || '').trim();
+
+    if (!payoutAddress) {
+      if (status) status.textContent = 'Enter a BCH payout address first.';
+      return;
+    }
+
+    if (status) status.textContent = 'Saving…';
+    try {
+      const res = await postJson('/api/pool/settings', { payoutAddress });
+      const saved = String(res?.settings?.payoutAddress || '').trim();
+
+      window.__payoutAddress = saved;
+      const legacy = document.getElementById('payout-address');
+      if (legacy) legacy.value = saved;
+
+      if (status) status.textContent =
+        'Saved. Restart Curtis BCH to reload CKPool with the new payout address.';
+
+      await loadPoolSettings();
+      await refreshConnectInfo();
+    } catch (err) {
+      if (status) status.textContent = `Save failed: ${err?.message || String(err)}`;
+    }
   });
 });
 

@@ -64,7 +64,7 @@ SUPPORT_CHECKIN_URL = _env_or_default("SUPPORT_CHECKIN_URL", f"{DEFAULT_SUPPORT_
 SUPPORT_TICKET_URL = _env_or_default("SUPPORT_TICKET_URL", f"{DEFAULT_SUPPORT_BASE_URL}/api/support/upload")
 
 APP_ID = "curtis-bch"
-APP_VERSION = os.getenv("APP_VERSION", "0.1.7").strip() or "0.1.7"
+APP_VERSION = os.getenv("APP_VERSION", "0.1.8").strip() or "0.1.8"
 APP_VERSION_SUFFIX = os.getenv("APP_VERSION_SUFFIX", "").strip()
 DISPLAY_VERSION = f"{APP_VERSION}{APP_VERSION_SUFFIX}"
 
@@ -1180,6 +1180,30 @@ def _write_ckpool_conf(conf: dict):
     CKPOOL_CONF_PATH.write_text(json.dumps(conf, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def _heal_ckpool_conf(conf: dict) -> dict:
+    """Normalize legacy Curtis/Axe-era CKPool settings to the current stack."""
+    conf = dict(conf or {})
+    btcd = conf.get("btcd")
+    if not isinstance(btcd, list) or not btcd or not isinstance(btcd[0], dict):
+        btcd = [{}]
+        conf["btcd"] = btcd
+    btcd[0]["url"] = "bchn:28332"
+    btcd[0]["auth"] = BCH_RPC_USER
+    btcd[0]["pass"] = BCH_RPC_PASS
+    btcd[0]["notify"] = True
+
+    conf["webdir"] = "/www/pool"
+    conf["userdir"] = "/www/users"
+    conf.setdefault("logdir", "/www")
+    conf.setdefault("serverurl", ["0.0.0.0:3333"])
+    conf.setdefault("mindiff", 1)
+    conf.setdefault("startdiff", 16)
+    conf.setdefault("maxdiff", 0)
+    conf.setdefault("btcsig", "/Curtis BCH/")
+    conf["zmqblock"] = "tcp://bchn:28334"
+    return conf
+
+
 def _pool_settings():
     conf_addr = ""
     validation_warning = None
@@ -1188,7 +1212,10 @@ def _pool_settings():
     startdiff = None
     maxdiff = None
     try:
-        conf = _read_ckpool_conf()
+        raw_conf = _read_ckpool_conf()
+        conf = _heal_ckpool_conf(raw_conf)
+        if conf != raw_conf:
+            _write_ckpool_conf(conf)
         conf_addr = str(conf.get("btcaddress") or "").strip()
         validation_warning = conf.get("validationWarning")
         validated = conf.get("validated")
@@ -1404,7 +1431,7 @@ def _update_pool_settings_full(
         if conversion_notice:
             validation_warning = f"{validation_warning} {conversion_notice}"
 
-    conf = _read_ckpool_conf()
+    conf = _heal_ckpool_conf(_read_ckpool_conf())
     # ckpool expects a legacy/Base58 address here.
     conf["btcaddress"] = addr_legacy
     # Ensure ckpool writes pool stats files for the UI (older configs may miss these).
@@ -1471,6 +1498,11 @@ def _update_pool_settings_full(
     else:
         conf.pop("validationWarning", None)
     _write_ckpool_conf(conf)
+    try:
+        with CKPOOL_CONF_PATH.open("rb") as fh:
+            os.fsync(fh.fileno())
+    except Exception:
+        pass
 
     return _pool_settings()
 

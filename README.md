@@ -1,18 +1,15 @@
-# Curtis BCH 0.1.7
+# Curtis BCH 0.1.8
 
-New in 0.1.7:
-- Permanently disables the BCHN wallet (`disablewallet=1`).
-- Adds Mainnet / Testnet4 switching in Node Settings.
-- Testnet4 uses BCHN's network-specific data directory, keeping mainnet data separate.
-- Adds a Connect a Miner dashboard card.
-- Auto-detects the dashboard request's IPv4 address for the Stratum URL when available.
-- Shows Stratum URL, username pattern, password, and copy buttons.
+Pool-settings repair release.
 
-Ports:
-- UI 24781
-- Stratum 6387
-- BCH P2P host 28447
-- BCH RPC internal 28332
+- Visible "Save payout address" button now POSTs directly to `/api/pool/settings`.
+- Visible save status now reports success/failure instead of writing to a hidden compatibility element.
+- Pool Settings is payout-address only for now.
+- Automatically migrates stale CKPool RPC `bchn:8332` to `bchn:28332`.
+- Refreshes CKPool RPC credentials from the current Umbrel app password.
+- Adds current BCHN ZMQ endpoint `tcp://bchn:28334`.
+- Removes unsupported CKPool `-B` startup flag.
+- Preserves any real payout address already configured.
+- Keeps wallet disabled, Mainnet/Testnet4 support, IPv4 miner connection card, sync display and prune persistence fixes.
 
-After changing Mainnet/Testnet4, restart Curtis BCH from Umbrel.
-Use a `bchtest:` payout address for Testnet4.
+After saving a payout address, restart Curtis BCH so CKPool reloads `ckpool.conf`.

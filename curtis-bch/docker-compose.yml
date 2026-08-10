@@ -42,11 +42,34 @@ services:
         }
         EOF
         fi
+
+        # Migrate stale Curtis/Axe-era pool settings without overwriting a real payout address.
+        if [ -s /data/pool/config/ckpool.conf ]; then
+          tmp="$$(mktemp)"
+          jq --arg pass "$${RPC_PASSWORD}" '
+            .btcd = [{
+              "auth":"bch",
+              "notify":true,
+              "pass":$pass,
+              "url":"bchn:28332"
+            }]
+            | .webdir="/www/pool"
+            | .userdir="/www/users"
+            | .logdir="/www"
+            | .zmqblock="tcp://bchn:28334"
+            | .serverurl=(.serverurl // ["0.0.0.0:3333"])
+            | .mindiff=(.mindiff // 1)
+            | .startdiff=(.startdiff // 16)
+            | .maxdiff=(.maxdiff // 0)
+            | .btcsig=(.btcsig // "/Curtis BCH/")
+          ' /data/pool/config/ckpool.conf > "$$tmp" && mv "$$tmp" /data/pool/config/ckpool.conf
+        fi
+
         chown -R 1000:1000 /data || true
         chmod -R ug+rwX /data || true
 
   bchn:
-    image: ghcr.io/soggyhammydev/curtis-bch-bchn:0.1.7
+    image: ghcr.io/soggyhammydev/curtis-bch-bchn:0.1.8
     user: "1000:1000"
     restart: unless-stopped
     stop_grace_period: 15m30s
@@ -72,7 +95,7 @@ services:
       start_period: 2m
 
   ckpool:
-    image: ghcr.io/soggyhammydev/curtis-bch-ckpool:0.1.7
+    image: ghcr.io/soggyhammydev/curtis-bch-ckpool:0.1.8
     user: "1000:1000"
     depends_on:
       - bchn
@@ -85,7 +108,7 @@ services:
       - ${APP_DATA_DIR}/data/pool/www:/www
 
   app:
-    image: ghcr.io/soggyhammydev/curtis-bch-app:0.1.7
+    image: ghcr.io/soggyhammydev/curtis-bch-app:0.1.8
     user: "1000:1000"
     restart: on-failure
     stop_grace_period: 30s
@@ -113,7 +136,7 @@ services:
       CKPOOL_STRATUM_HOST: ckpool
       CKPOOL_STRATUM_PORT: "3333"
       APP_CHANNEL: CURTIS
-      APP_VERSION: "0.1.7"
+      APP_VERSION: "0.1.8"
       STATIC_DIR: /app/static
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import sys,urllib.request; r=urllib.request.urlopen('http://127.0.0.1:3000/api/about',timeout=3); sys.exit(0 if r.status==200 else 1)\""]
