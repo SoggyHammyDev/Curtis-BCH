@@ -101,7 +101,7 @@ services:
       init:
         condition: service_completed_successfully
     ports:
-      - "28333:28333/tcp"
+      - "28447:28333/tcp"
     volumes:
       - ${APP_DATA_DIR}/data/node:/data
     healthcheck:
