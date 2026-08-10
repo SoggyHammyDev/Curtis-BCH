@@ -35,6 +35,7 @@ NODE_REINDEX_FLAG_PATH = Path("/data/node/.reindex-chainstate")
 STATE_DIR = Path("/data/ui/state")
 POOL_SERIES_PATH = STATE_DIR / "pool_timeseries.jsonl"
 POOL_STATE_PATH = STATE_DIR / "pool_state.json"
+POOL_PROFILES_PATH = STATE_DIR / "pool_profiles.json"
 ROUND_EFFORT_STATE_PATH = STATE_DIR / "round_effort_state.json"
 CKPOOL_LOG_STATE_PATH = STATE_DIR / "ckpool_log_state.json"
 BLOCKS_STATE_PATH = STATE_DIR / "blocks_state.json"
@@ -64,7 +65,7 @@ SUPPORT_CHECKIN_URL = _env_or_default("SUPPORT_CHECKIN_URL", f"{DEFAULT_SUPPORT_
 SUPPORT_TICKET_URL = _env_or_default("SUPPORT_TICKET_URL", f"{DEFAULT_SUPPORT_BASE_URL}/api/support/upload")
 
 APP_ID = "curtis-bch"
-APP_VERSION = os.getenv("APP_VERSION", "0.1.8").strip() or "0.1.8"
+APP_VERSION = os.getenv("APP_VERSION", "0.1.9").strip() or "0.1.9"
 APP_VERSION_SUFFIX = os.getenv("APP_VERSION_SUFFIX", "").strip()
 DISPLAY_VERSION = f"{APP_VERSION}{APP_VERSION_SUFFIX}"
 
@@ -906,6 +907,7 @@ def _update_network_conf(network: str):
     network = str(network or "mainnet").strip().lower()
     if network not in ("mainnet", "testnet4"):
         raise ValueError("network must be mainnet or testnet4")
+
     NODE_CONF_PATH.parent.mkdir(parents=True, exist_ok=True)
     lines = NODE_CONF_PATH.read_text(encoding="utf-8", errors="replace").splitlines() if NODE_CONF_PATH.exists() else []
     _set_conf_key(lines, "testnet", "0")
@@ -921,6 +923,7 @@ def _update_prune_conf(prune: int):
     lines = NODE_CONF_PATH.read_text(encoding="utf-8", errors="replace").splitlines() if NODE_CONF_PATH.exists() else []
     _set_conf_key(lines, "prune", str(int(prune)))
     NODE_CONF_PATH.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+
 
 def _node_status():
     info = _rpc_call("getblockchaininfo")
@@ -1179,92 +1182,122 @@ def _write_ckpool_conf(conf: dict):
 
 
 def _heal_ckpool_conf(conf: dict) -> dict:
-    """Normalize legacy Curtis/Axe-era CKPool settings to the current stack."""
     conf = dict(conf or {})
     btcd = conf.get("btcd")
     if not isinstance(btcd, list) or not btcd or not isinstance(btcd[0], dict):
         btcd = [{}]
         conf["btcd"] = btcd
+
     btcd[0]["url"] = "bchn:28332"
     btcd[0]["auth"] = BCH_RPC_USER
     btcd[0]["pass"] = BCH_RPC_PASS
     btcd[0]["notify"] = True
+    btcd[0]["zmqnotify"] = "tcp://bchn:28334"
 
     conf["webdir"] = "/www/pool"
     conf["userdir"] = "/www/users"
-    conf.setdefault("logdir", "/www")
-    conf.setdefault("serverurl", ["0.0.0.0:3333"])
+    conf["logdir"] = "/www"
+    conf["serverurl"] = ["0.0.0.0:3333"]
     conf.setdefault("mindiff", 1)
     conf.setdefault("startdiff", 16)
     conf.setdefault("maxdiff", 0)
+    conf["poolfee"] = 0.0
     conf.setdefault("btcsig", "/Curtis BCH/")
-    conf["zmqblock"] = "tcp://bchn:28334"
+    conf.pop("zmqblock", None)
+    return conf
+
+
+def _default_pool_profile() -> dict:
+    return {"payoutAddress": "", "mindiff": 1, "startdiff": 16, "maxdiff": 0}
+
+
+def _write_pool_profiles(profiles: dict):
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    POOL_PROFILES_PATH.write_text(json.dumps(profiles, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _read_pool_profiles() -> dict:
+    try:
+        if POOL_PROFILES_PATH.exists():
+            obj = json.loads(POOL_PROFILES_PATH.read_text(encoding="utf-8", errors="replace"))
+            if isinstance(obj, dict):
+                return obj
+    except Exception:
+        pass
+
+    profiles = {"mainnet": _default_pool_profile(), "testnet4": _default_pool_profile()}
+    try:
+        conf = _read_ckpool_conf()
+        addr = str(conf.get("btcaddress") or "").strip()
+        if addr == "CHANGEME_BCH_PAYOUT_ADDRESS":
+            addr = ""
+        profiles["mainnet"] = {
+            "payoutAddress": addr,
+            "mindiff": int(conf.get("mindiff") or 1),
+            "startdiff": int(conf.get("startdiff") or 16),
+            "maxdiff": int(conf.get("maxdiff") or 0),
+        }
+    except Exception:
+        pass
+    _write_pool_profiles(profiles)
+    return profiles
+
+
+def _pool_profile(network: str | None = None) -> dict:
+    net = network or _current_settings().get("network") or "mainnet"
+    profile = _read_pool_profiles().get(net)
+    out = _default_pool_profile()
+    if isinstance(profile, dict):
+        out.update(profile)
+    return out
+
+
+def _save_pool_profile(network: str, profile: dict):
+    profiles = _read_pool_profiles()
+    merged = _default_pool_profile()
+    merged.update(profile or {})
+    profiles[network] = merged
+    _write_pool_profiles(profiles)
+
+
+def _apply_pool_profile(network: str | None = None):
+    net = network or _current_settings().get("network") or "mainnet"
+    profile = _pool_profile(net)
+    conf = _heal_ckpool_conf(_read_ckpool_conf())
+    conf["btcaddress"] = str(profile.get("payoutAddress") or "").strip()
+    conf["mindiff"] = int(profile.get("mindiff") or 1)
+    conf["startdiff"] = int(profile.get("startdiff") or 16)
+    conf["maxdiff"] = int(profile.get("maxdiff") or 0)
+    _write_ckpool_conf(conf)
     return conf
 
 
 def _pool_settings():
-    conf_addr = ""
-    validation_warning = None
-    validated = None
-    mindiff = None
-    startdiff = None
-    maxdiff = None
-    try:
-        raw_conf = _read_ckpool_conf()
-        conf = _heal_ckpool_conf(raw_conf)
-        if conf != raw_conf:
-            _write_ckpool_conf(conf)
-        conf_addr = str(conf.get("btcaddress") or "").strip()
-        validation_warning = conf.get("validationWarning")
-        validated = conf.get("validated")
-        mindiff = conf.get("mindiff")
-        startdiff = conf.get("startdiff")
-        maxdiff = conf.get("maxdiff")
-    except Exception:
-        conf_addr = ""
-
-    payout_address = conf_addr
+    network = _current_settings().get("network") or "mainnet"
+    profile = _pool_profile(network)
+    payout_address = str(profile.get("payoutAddress") or "").strip()
     configured = bool(payout_address) and payout_address not in [
         CKPOOL_FALLBACK_DONATION_ADDRESS,
         "CHANGEME_BCH_PAYOUT_ADDRESS",
     ]
 
-    if not isinstance(validation_warning, str):
-        validation_warning = None
-    if validated is not None:
-        validated = bool(validated)
-
-    def _to_int(v, default: int) -> int:
+    def _to_int(v, default):
         try:
-            if isinstance(v, bool):
-                return int(default)
-            if isinstance(v, int):
-                return int(v)
-            if isinstance(v, float):
-                if not math.isfinite(v):
-                    return int(default)
-                if float(int(v)) != float(v):
-                    return int(default)
-                return int(v)
-            s = str(v).strip()
-            if not re.fullmatch(r"[0-9]+", s):
-                return int(default)
-            return int(s)
+            return int(v)
         except Exception:
             return int(default)
 
     return {
-        "payoutAddress": payout_address or "",
+        "network": network,
+        "payoutAddress": payout_address,
         "configured": configured,
-        "validated": validated,
-        "validationWarning": validation_warning,
-        "mindiff": _to_int(mindiff, 1),
-        "startdiff": _to_int(startdiff, 16),
-        "maxdiff": _to_int(maxdiff, 0),
-        "warning": (
-            "Set a payout address before mining. If unset, ckpool may default to a donation address."
-            if not configured
-            else None
+        "validated": configured,
+        "validationWarning": None,
+        "mindiff": _to_int(profile.get("mindiff"), 1),
+        "startdiff": _to_int(profile.get("startdiff"), 16),
+        "maxdiff": _to_int(profile.get("maxdiff"), 0),
+        "warning": None if configured else (
+            f"Set a {'Testnet4' if network == 'testnet4' else 'mainnet'} payout address before mining."
         ),
     }
 
@@ -1395,6 +1428,36 @@ def _update_pool_settings(*, payout_address: str):
     return _update_pool_settings_full(payout_address=payout_address)
 
 
+def _validate_cashaddr_for_network(addr: str, network: str) -> str:
+    a = str(addr or "").strip()
+    if not a:
+        raise ValueError("payoutAddress is required")
+
+    if network == "mainnet" and _LEGACY_RE.match(a):
+        return a
+
+    m = _CASHADDR_RE.match(a)
+    if not m:
+        if network == "testnet4":
+            raise ValueError("Testnet4 payoutAddress must be a bchtest: CashAddr")
+        raise ValueError("payoutAddress must be a bitcoincash: CashAddr or legacy BCH address")
+
+    expected_prefix = "bchtest" if network == "testnet4" else "bitcoincash"
+    explicit_prefix = a.split(":", 1)[0].lower() if ":" in a else None
+    prefix = explicit_prefix or expected_prefix
+    if prefix != expected_prefix:
+        raise ValueError(
+            f"{'Testnet4' if network == 'testnet4' else 'Mainnet'} requires a {expected_prefix}: payout address"
+        )
+
+    body = m.group("body").lower()
+    data = [_CASHADDR_ALPHABET_REV[ch] for ch in body]
+    if not _cashaddr_verify_checksum(prefix, data):
+        raise ValueError("payoutAddress has an invalid CashAddr checksum")
+
+    return f"{prefix}:{body}"
+
+
 def _update_pool_settings_full(
     *,
     payout_address: str,
@@ -1402,106 +1465,41 @@ def _update_pool_settings_full(
     startdiff=None,
     maxdiff=None,
 ):
-    addr_raw = payout_address.strip()
-    if not addr_raw:
-        raise ValueError("payoutAddress is required")
+    network = _current_settings().get("network") or "mainnet"
+    addr = _validate_cashaddr_for_network(payout_address, network)
+    current = _pool_profile(network)
 
-    addr_legacy, converted_from_cashaddr = _cashaddr_to_legacy(addr_raw)
+    def _int_setting(v, fallback):
+        if v is None or str(v).strip() == "":
+            return int(fallback)
+        n = int(v)
+        try:
+            if float(v) != float(n):
+                raise ValueError
+        except Exception:
+            raise ValueError("difficulty values must be whole numbers")
+        return n
 
-    validated = None
-    validation_warning = None
-    conversion_notice = None
-    if converted_from_cashaddr:
-        conversion_notice = (
-            f"CashAddr detected; converted locally on your 5tratumOS to legacy format for ckpool compatibility: {addr_legacy}. "
-            f"Reference converter: {_CASHADDR_HELP_URL}"
-        )
-    try:
-        res = _rpc_call("validateaddress", [addr_legacy]) or {}
-        validated = bool(res.get("isvalid"))
-        if not validated:
-            raise ValueError("payoutAddress is not a valid BCH address")
-    except Exception:
-        validated = False
-        validation_warning = (
-            "Node RPC unavailable; saved without RPC validation. Double-check your address, then restart the app."
-        )
-        if conversion_notice:
-            validation_warning = f"{validation_warning} {conversion_notice}"
+    md = _int_setting(mindiff, current.get("mindiff", 1))
+    sd = _int_setting(startdiff, current.get("startdiff", 16))
+    xd = _int_setting(maxdiff, current.get("maxdiff", 0))
 
-    conf = _heal_ckpool_conf(_read_ckpool_conf())
-    # ckpool expects a legacy/Base58 address here.
-    conf["btcaddress"] = addr_legacy
-    # Ensure ckpool writes pool stats files for the UI (older configs may miss these).
-    conf["webdir"] = "/www/pool"
-    conf["userdir"] = "/www/users"
-    _record_payout_history(addr_legacy)
+    if md < 1:
+        raise ValueError("mindiff must be >= 1")
+    if sd < md:
+        raise ValueError("startdiff must be >= mindiff")
+    if xd < 0 or (xd != 0 and xd < sd):
+        raise ValueError("maxdiff must be 0 (no limit) or >= startdiff")
 
-    def _maybe_int(v):
-        if v is None:
-            return None
-        if isinstance(v, bool):
-            return None
-        if isinstance(v, int):
-            return int(v)
-        if isinstance(v, float):
-            if not math.isfinite(v):
-                return None
-            if float(int(v)) != float(v):
-                raise ValueError("difficulty values must be whole numbers (ckpool does not support fractional difficulties)")
-            return int(v)
-        s = str(v).strip()
-        if s == "":
-            return None
-        if not re.fullmatch(r"[0-9]+", s):
-            raise ValueError("difficulty values must be whole numbers (ckpool does not support fractional difficulties)")
-        return int(s)
-
-    md = _maybe_int(mindiff)
-    sd = _maybe_int(startdiff)
-    xd = _maybe_int(maxdiff)
-
-    # If any diff value is provided, validate and apply; otherwise keep existing config.
-    if md is not None or sd is not None or xd is not None:
-        md = md if md is not None else int(conf.get("mindiff") or 1)
-        sd = sd if sd is not None else int(conf.get("startdiff") or 16)
-        xd = xd if xd is not None else int(conf.get("maxdiff") or 0)
-
-        if md < 1:
-            raise ValueError("mindiff must be >= 1")
-        if sd < 1:
-            raise ValueError("startdiff must be >= 1")
-        if sd < md:
-            raise ValueError("startdiff must be >= mindiff")
-        if xd < 0:
-            raise ValueError("maxdiff must be 0 (no limit) or >= startdiff")
-        if xd != 0 and xd < sd:
-            raise ValueError("maxdiff must be 0 (no limit) or >= startdiff")
-
-        conf["mindiff"] = md
-        conf["startdiff"] = sd
-        conf["maxdiff"] = xd
-    else:
-        # Self-heal older configs that don't include these keys (keep existing defaults).
-        conf.setdefault("mindiff", 1)
-        conf.setdefault("startdiff", 16)
-        conf.setdefault("maxdiff", 0)
-
-    conf["validated"] = bool(validated) if validated is not None else False
-    if conversion_notice and not validation_warning:
-        validation_warning = conversion_notice
-
-    if validation_warning:
-        conf["validationWarning"] = validation_warning
-    else:
-        conf.pop("validationWarning", None)
-    _write_ckpool_conf(conf)
-    try:
-        with CKPOOL_CONF_PATH.open("rb") as fh:
-            os.fsync(fh.fileno())
-    except Exception:
-        pass
-
+    profile = {
+        "payoutAddress": addr,
+        "mindiff": md,
+        "startdiff": sd,
+        "maxdiff": xd,
+    }
+    _save_pool_profile(network, profile)
+    _apply_pool_profile(network)
+    _record_payout_history(addr)
     return _pool_settings()
 
 
@@ -3881,30 +3879,7 @@ class Handler(BaseHTTPRequestHandler):
             }))
 
         if self.path == "/api/settings":
-            current = _current_settings()
-            try:
-                prune = int(body.get("prune", current.get("prune", 5500)))
-            except Exception:
-                return self._send(*_json({"error": "invalid prune"}, status=400))
-            if prune != 0 and prune < 550:
-                return self._send(*_json({"error": "prune must be 0 or >= 550 MiB"}, status=400))
-
-            network = str(body.get("network", current.get("network", "mainnet")) or "mainnet").strip().lower()
-            if network not in ("mainnet", "testnet4"):
-                return self._send(*_json({"error": "network must be mainnet or testnet4"}, status=400))
-
-            try:
-                _update_prune_conf(prune)
-                _update_network_conf(network)
-            except Exception as e:
-                return self._send(*_json({"error": str(e)}, status=400))
-
-            return self._send(*_json({
-                "ok": True,
-                "settings": {"prune": prune, "network": network},
-                "restartRequired": True,
-                "networkChanged": network != current.get("network"),
-            }))
+            return self._send(*_json(_current_settings()))
 
         if self.path == "/api/pool/settings":
             return self._send(*_json(_pool_settings()))
@@ -4028,6 +4003,7 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 _update_prune_conf(prune)
                 _update_network_conf(network)
+                _apply_pool_profile(network)
             except Exception as e:
                 return self._send(*_json({"error": str(e)}, status=400))
 

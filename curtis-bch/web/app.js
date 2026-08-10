@@ -2656,7 +2656,8 @@ async function loadBackendInfo() {
 async function loadSettings() {
   try {
     const s = await fetchJson('/api/settings');
-    document.getElementById('network').value = s.network || 'mainnet';
+    const legacyNetwork = document.getElementById('network');
+    if (legacyNetwork) legacyNetwork.value = s.network || 'mainnet';
     const pruneValue = s.prune ?? 5500;
     const legacyPrune = document.getElementById('prune');
     if (legacyPrune) legacyPrune.value = pruneValue;
@@ -2815,7 +2816,7 @@ document.getElementById('pool-settings-form')?.addEventListener('submit', async 
   try {
     const payoutAddress = document.getElementById('payoutAddress').value;
     const payoutTrim = String(payoutAddress || '').trim();
-    const inputWasCashaddr = __CASHADDR_RE.test(payoutTrim);
+    const inputWasCashaddr = false; // BCH-native EloPool keeps CashAddr unchanged.
     const inputWasLegacy = __LEGACY_BCH_RE.test(payoutTrim);
 
     const mindiff = Number(document.getElementById('mindiff')?.value);
@@ -3053,27 +3054,37 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   document.getElementById('savePoolSettings')?.addEventListener('click', async () => {
-    const input = document.getElementById('payoutAddress');
     const status = document.getElementById('poolSettingsStatus');
-    const payoutAddress = String(input?.value || '').trim();
+    const payoutAddress = String(document.getElementById('payoutAddress')?.value || '').trim();
+    const mindiff = Number(document.getElementById('mindiff')?.value);
+    const startdiff = Number(document.getElementById('startdiff')?.value);
+    const maxdiff = Number(document.getElementById('maxdiff')?.value);
 
     if (!payoutAddress) {
       if (status) status.textContent = 'Enter a BCH payout address first.';
       return;
     }
+    if (!Number.isInteger(mindiff) || mindiff < 1 ||
+        !Number.isInteger(startdiff) || startdiff < mindiff ||
+        !Number.isInteger(maxdiff) || maxdiff < 0 ||
+        (maxdiff !== 0 && maxdiff < startdiff)) {
+      if (status) status.textContent =
+        'Check difficulty values: start must be ≥ minimum; maximum is 0 or ≥ start.';
+      return;
+    }
 
     if (status) status.textContent = 'Saving…';
     try {
-      const res = await postJson('/api/pool/settings', { payoutAddress });
+      const res = await postJson('/api/pool/settings', {
+        payoutAddress, mindiff, startdiff, maxdiff
+      });
       const saved = String(res?.settings?.payoutAddress || '').trim();
-
       window.__payoutAddress = saved;
       const legacy = document.getElementById('payout-address');
       if (legacy) legacy.value = saved;
 
       if (status) status.textContent =
-        'Saved. Restart Curtis BCH to reload CKPool with the new payout address.';
-
+        'Saved. Restart Curtis BCH so CKPool reloads the pool settings.';
       await loadPoolSettings();
       await refreshConnectInfo();
     } catch (err) {

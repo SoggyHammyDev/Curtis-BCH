@@ -156,9 +156,25 @@
       <div class="settings-grid">
         <article class="panel">
           <span class="panel-kicker">POOL</span><h2>Solo mining</h2>
-          <label>Payout address<input id="payoutAddress" class="input mono" type="text" placeholder="bitcoincash:q… or legacy address"></label>
-          <label>Difficulty preset<select id="vardiffPreset" class="input"><option value="micro">Micro</option><option value="small">Small</option><option value="home">Home</option><option value="farm">Farm</option><option value="mega">Mega</option><option value="custom">Custom</option></select></label>
-          <button id="savePoolSettings" class="primary">Save payout address</button><div id="poolSettingsStatus" class="muted small"></div>
+          <label>Payout address<input id="payoutAddress" class="input mono" type="text" placeholder="bitcoincash:q… or bchtest:q…"></label>
+          <label>Difficulty preset
+            <select id="vardiffPreset" class="input">
+              <option value="mixed">Mixed / default</option>
+              <option value="micro">Micro</option>
+              <option value="small">Small</option>
+              <option value="home">Home</option>
+              <option value="farm">Farm</option>
+              <option value="mega">Mega</option>
+              <option value="custom">Custom</option>
+            </select>
+          </label>
+          <div class="triple">
+            <label>Minimum difficulty<input id="mindiff" class="input" type="number" min="1" step="1"></label>
+            <label>Starting difficulty<input id="startdiff" class="input" type="number" min="1" step="1"></label>
+            <label>Maximum difficulty<input id="maxdiff" class="input" type="number" min="0" step="1"></label>
+          </div>
+          <p class="muted small">Maximum 0 means no limit. Presets fill the values; manual edits switch to Custom.</p>
+          <button id="savePoolSettings" class="primary">Save pool settings</button><div id="poolSettingsStatus" class="muted small"></div>
         </article>
         <article class="panel">
           <span class="panel-kicker">NODE</span><h2>BCHN configuration</h2>

@@ -1,15 +1,16 @@
-# Curtis BCH 0.1.8
+# Curtis BCH 0.1.9
 
-Pool-settings repair release.
+Testnet4 + persistent pool settings repair.
 
-- Visible "Save payout address" button now POSTs directly to `/api/pool/settings`.
-- Visible save status now reports success/failure instead of writing to a hidden compatibility element.
-- Pool Settings is payout-address only for now.
-- Automatically migrates stale CKPool RPC `bchn:8332` to `bchn:28332`.
-- Refreshes CKPool RPC credentials from the current Umbrel app password.
-- Adds current BCHN ZMQ endpoint `tcp://bchn:28334`.
-- Removes unsupported CKPool `-B` startup flag.
-- Preserves any real payout address already configured.
-- Keeps wallet disabled, Mainnet/Testnet4 support, IPv4 miner connection card, sync display and prune persistence fixes.
+- Fixes BCHN Testnet4 startup by network-scoping port/rpcport/rpcbind/ZMQ.
+- Mainnet and Testnet4 both use internal RPC 28332, P2P 28333, ZMQ 28334.
+- Fixes GET /api/settings returning 400.
+- Keeps separate Mainnet and Testnet4 payout/difficulty profiles.
+- Restores Minimum / Starting / Maximum difficulty fields.
+- Presets populate custom fields; manual changes are supported.
+- Saves payout + diff settings together.
+- Uses native `bitcoincash:` / `bchtest:` CashAddr with BCH-native EloPool.
+- Keeps wallet disabled and prune as the only exposed BCHN tuning setting.
+- Uses official BCHN 29.1.0 binaries and EloPool v1.0.0-stable.
 
-After saving a payout address, restart Curtis BCH so CKPool reloads `ckpool.conf`.
+After changing network or pool settings, restart Curtis BCH from Umbrel.

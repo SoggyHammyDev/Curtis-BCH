@@ -42,5 +42,5 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: |
-            ghcr.io/soggyhammydev/${{ matrix.image }}:0.1.8
+            ghcr.io/soggyhammydev/${{ matrix.image }}:0.1.9
             ghcr.io/soggyhammydev/${{ matrix.image }}:latest
