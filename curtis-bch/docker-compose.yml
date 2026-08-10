@@ -24,24 +24,12 @@ services:
         set -eu
         apk add --no-cache jq >/dev/null
         mkdir -p /data/node /data/pool/config /data/pool/www/pool /data/pool/www/users /data/ui/state
-
-        # Node config is completed by bchn-entrypoint.sh.
         touch /data/node/bitcoin.conf
-
-        # Create a CKPool config if one does not exist.
-        # The UI/backend may later replace btcaddress with the configured payout address.
         if [ ! -s /data/pool/config/ckpool.conf ]; then
           cat > /data/pool/config/ckpool.conf <<EOF
         {
           "btcaddress": "",
-          "btcd": [
-            {
-              "auth": "bch",
-              "notify": true,
-              "pass": "$${RPC_PASSWORD}",
-              "url": "bchn:28332"
-            }
-          ],
+          "btcd": [{"auth":"bch","notify":true,"pass":"$${RPC_PASSWORD}","url":"bchn:28332"}],
           "btcsig": "/Curtis BCH/",
           "logdir": "/www",
           "maxdiff": 0,
@@ -54,22 +42,11 @@ services:
         }
         EOF
         fi
-
-        # If Curtis BCH has already saved a payout address, apply it before CKPool starts.
-        if [ -f /data/ui/state/pool_settings.json ]; then
-          addr="$$(jq -r '.payoutAddress // .payout_address // empty' /data/ui/state/pool_settings.json 2>/dev/null || true)"
-          if [ -n "$$addr" ]; then
-            tmp="$$(mktemp)"
-            jq --arg a "$$addr" '.btcaddress=$a' /data/pool/config/ckpool.conf > "$$tmp"
-            mv "$$tmp" /data/pool/config/ckpool.conf
-          fi
-        fi
-
         chown -R 1000:1000 /data || true
         chmod -R ug+rwX /data || true
 
   bchn:
-    image: ghcr.io/willitmod/bitcoin-cash-node:v29.0.0-wm3
+    image: ghcr.io/soggyhammydev/curtis-bch-bchn:0.1.5
     user: "1000:1000"
     restart: unless-stopped
     stop_grace_period: 15m30s
@@ -80,40 +57,22 @@ services:
       - "28447:28333/tcp"
     volumes:
       - ${APP_DATA_DIR}/data/node:/data
-      - ${APP_DATA_DIR}/templates/bchn-entrypoint.sh:/bchn-entrypoint.sh:ro
     environment:
       BCH_RPC_USER: bch
       BCH_RPC_PASS: "${APP_PASSWORD}"
-    entrypoint:
-      - /bin/sh
-      - /bchn-entrypoint.sh
+      PRUNE_MIB: "5500"
+      DBCACHE_MIB: "1024"
+      MAX_MEMPOOL_MIB: "128"
+      RPC_THREADS: "8"
     healthcheck:
-      test:
-        - CMD-SHELL
-        - bitcoin-cli -datadir=/data getblockchaininfo >/dev/null 2>&1
+      test: ["CMD-SHELL", "bitcoin-cli -datadir=/data getblockchaininfo >/dev/null 2>&1"]
       interval: 30s
       timeout: 10s
       retries: 20
       start_period: 2m
 
   ckpool:
-    image: ghcr.io/willitmod/wim-solo-ckpool:0.8.3-rc1-590fb2a
-    entrypoint:
-      - /bin/sh
-    command:
-      - "-ec"
-      - |
-        rm -f /tmp/ckpool/*.pid 2>/dev/null || true
-        if command -v ckpool >/dev/null 2>&1; then
-          exec ckpool -k -B -L -c /config/ckpool.conf
-        elif [ -x /bin/ckpool ]; then
-          exec /bin/ckpool -k -B -L -c /config/ckpool.conf
-        elif [ -x /usr/bin/ckpool ]; then
-          exec /usr/bin/ckpool -k -B -L -c /config/ckpool.conf
-        else
-          echo "ckpool binary not found in image"
-          exit 1
-        fi
+    image: ghcr.io/soggyhammydev/curtis-bch-ckpool:0.1.5
     user: "1000:1000"
     depends_on:
       - bchn
@@ -126,7 +85,7 @@ services:
       - ${APP_DATA_DIR}/data/pool/www:/www
 
   app:
-    image: ghcr.io/soggyhammydev/curtis-bch-app:0.1.4
+    image: ghcr.io/soggyhammydev/curtis-bch-app:0.1.5
     user: "1000:1000"
     restart: on-failure
     stop_grace_period: 30s
@@ -135,11 +94,9 @@ services:
       - ckpool
     networks:
       default:
-        aliases:
-          - curtis-bch-app
+        aliases: [curtis-bch-app]
       umbrel_main_network:
-        aliases:
-          - curtis-bch-app
+        aliases: [curtis-bch-app]
     volumes:
       - ${APP_DATA_DIR}/data:/data
     environment:
@@ -156,12 +113,10 @@ services:
       CKPOOL_STRATUM_HOST: ckpool
       CKPOOL_STRATUM_PORT: "3333"
       APP_CHANNEL: CURTIS
-      APP_VERSION: "0.1.4"
+      APP_VERSION: "0.1.5"
       STATIC_DIR: /app/static
     healthcheck:
-      test:
-        - CMD-SHELL
-        - python -c "import sys,urllib.request; r=urllib.request.urlopen('http://127.0.0.1:3000/api/about',timeout=3); sys.exit(0 if r.status==200 else 1)"
+      test: ["CMD-SHELL", "python -c \"import sys,urllib.request; r=urllib.request.urlopen('http://127.0.0.1:3000/api/about',timeout=3); sys.exit(0 if r.status==200 else 1)\""]
       interval: 15s
       timeout: 5s
       retries: 20

@@ -1982,7 +1982,7 @@ function renderLuck(data) {
   if (progressFill) {
     progressFill.style.width = `${progress}%`;
     progressFill.style.minWidth = validPct != null && validPct > 0 ? '6px' : '0';
-    progressFill.classList.toggle('axebch-luck-progress__fill--over', validPct != null && validPct > 100);
+    progressFill.classList.toggle('Curtis BCH-luck-progress__fill--over', validPct != null && validPct > 100);
   }
 
   const luckHeadline = document.getElementById('luck-current-headline');

@@ -1,19 +1,19 @@
-# Curtis BCH — Umbrel Fixed Build 0.1.4
+# Curtis BCH 0.1.5
 
-0.1.4 fixes the first-launch JavaScript errors from the full UI redesign.
+Self-contained Curtis BCH Umbrel build.
 
-## Fixes
-- Backend version now honors `APP_VERSION` instead of serving legacy `0.9.18`.
-- Added a compatibility DOM layer for legacy controller IDs used by `app.js`.
-- Guarded direct event bindings against missing optional UI controls.
-- Added a bridge for redesigned payout/inactive-worker controls.
-- Keeps the 0.1.3 Umbrel networking fixes:
-  - Web UI `24781`
-  - Stratum `6387`
-  - BCH P2P `28447`
-  - unique proxy target `curtis-bch-app`
-  - BCH RPC `28332`
-  - BCH ZMQ `28334`
-  - explicit CKPool config startup
+- UI: 24781
+- Stratum: 6387
+- BCH P2P: 28447
+- BCH RPC (internal): 28332
+- BCH ZMQ (internal): 28334
 
-The GitHub workflow publishes `ghcr.io/soggyhammydev/curtis-bch-app:0.1.4` and `latest`.
+The GitHub workflow builds three SoggyHammyDev GHCR images:
+- curtis-bch-app
+- curtis-bch-bchn
+- curtis-bch-ckpool
+
+BCHN is packaged from the official Bitcoin Cash Node release binaries.
+CKPool is compiled from upstream open-source source code.
+
+Before installing, let all three GitHub Actions matrix jobs complete and make all three GHCR packages public.

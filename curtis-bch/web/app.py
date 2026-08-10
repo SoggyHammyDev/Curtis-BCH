@@ -63,8 +63,8 @@ def _env_or_default(name: str, default: str) -> str:
 SUPPORT_CHECKIN_URL = _env_or_default("SUPPORT_CHECKIN_URL", f"{DEFAULT_SUPPORT_BASE_URL}/api/telemetry/ping")
 SUPPORT_TICKET_URL = _env_or_default("SUPPORT_TICKET_URL", f"{DEFAULT_SUPPORT_BASE_URL}/api/support/upload")
 
-APP_ID = "willitmod-dev-bch"
-APP_VERSION = os.getenv("APP_VERSION", "0.1.4").strip() or "0.1.4"
+APP_ID = "curtis-bch"
+APP_VERSION = os.getenv("APP_VERSION", "0.1.5").strip() or "0.1.5"
 APP_VERSION_SUFFIX = os.getenv("APP_VERSION_SUFFIX", "").strip()
 DISPLAY_VERSION = f"{APP_VERSION}{APP_VERSION_SUFFIX}"
 
