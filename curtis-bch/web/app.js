@@ -1,3 +1,42 @@
+
+async function refreshConnectInfo() {
+  const urlEl = document.getElementById('connect-url');
+  const userEl = document.getElementById('connect-user');
+  const badge = document.getElementById('connect-network-badge');
+  const note = document.getElementById('connect-note');
+  if (!urlEl && !userEl) return;
+  try {
+    const res = await fetch('/api/connect-info', { cache: 'no-store' });
+    const info = await res.json();
+    const browserHost = window.location.hostname || '';
+    const ipv4 = info.ipv4 || (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(browserHost) ? browserHost : null);
+    const port = Number(info.stratumPort || 6387);
+    if (urlEl) urlEl.textContent = ipv4 ? `stratum+tcp://${ipv4}:${port}` : `stratum+tcp://YOUR-UMBREL-IP:${port}`;
+
+    const payout = String(info.payoutAddress || '').trim();
+    if (userEl) userEl.textContent = payout && payout !== 'CHANGEME_BCH_PAYOUT_ADDRESS'
+      ? `${payout}.worker-name`
+      : 'Set payout address in Settings';
+
+    const network = String(info.network || '').toLowerCase();
+    if (badge) badge.textContent = network === 'testnet4' ? 'TESTNET4' : 'MAINNET';
+    if (note) note.textContent = ipv4
+      ? `Detected Umbrel IPv4: ${ipv4}. Stratum listens on port ${port}.`
+      : `Open Curtis BCH using your Umbrel IPv4 to auto-detect it. Stratum listens on port ${port}.`;
+  } catch {
+    if (urlEl) urlEl.textContent = 'Unable to detect pool address';
+  }
+}
+
+function wireCopyButton(buttonId, valueId) {
+  document.getElementById(buttonId)?.addEventListener('click', async () => {
+    const text = document.getElementById(valueId)?.textContent || '';
+    if (!text) return;
+    try { await navigator.clipboard.writeText(text); } catch {}
+  });
+}
+
+
 function bytesToMiB(bytes) {
   if (bytes == null) return '-';
   return `${Math.max(0, bytes / (1024 * 1024)).toFixed(1)} MiB`;
@@ -1577,6 +1616,13 @@ async function refresh() {
     }
     const difficultyModern = document.getElementById('difficulty');
     if (difficultyModern) difficultyModern.textContent = formatBestShare(node.difficulty);
+    const networkTitle = document.getElementById('network-title');
+    if (networkTitle) {
+      const chain = String(node.chain || '').toLowerCase();
+      networkTitle.textContent = (chain === 'test' || chain === 'test4')
+        ? 'Bitcoin Cash · Testnet4'
+        : 'Bitcoin Cash · Mainnet';
+    }
     const syncModern = document.getElementById('sync');
     if (syncModern) {
       const verifyPct = Math.max(0, Math.min(100, Number(node.verificationprogress || 0) * 100));
@@ -2615,6 +2661,8 @@ async function loadSettings() {
     if (legacyPrune) legacyPrune.value = pruneValue;
     const modernPrune = document.getElementById('pruneMiB');
     if (modernPrune) modernPrune.value = pruneValue;
+    const networkSelect = document.getElementById('nodeNetwork');
+    if (networkSelect) networkSelect.value = s.network || 'mainnet';
     document.getElementById('settings-status').textContent = '';
   } catch {
     document.getElementById('settings-status').textContent = 'Settings unavailable (node may be starting).';
@@ -2715,11 +2763,12 @@ document.getElementById('saveNodeSettings')?.addEventListener('click', async () 
   }
   if (status) status.textContent = 'Saving…';
   try {
-    const res = await postJson('/api/settings', { prune });
+    const network = document.getElementById('nodeNetwork')?.value || 'mainnet';
+    const res = await postJson('/api/settings', { prune, network });
     const legacy = document.getElementById('prune');
     if (legacy) legacy.value = prune;
     if (status) status.textContent = res && res.restartRequired
-      ? `Saved ${prune.toLocaleString()} MiB. Restart Curtis BCH to apply it.`
+      ? `Saved. Restart Curtis BCH to apply ${network === 'testnet4' ? 'Testnet4' : 'Mainnet'} and prune ${prune.toLocaleString()} MiB.`
       : `Saved ${prune.toLocaleString()} MiB.`;
   } catch (err) {
     if (status) status.textContent = `Save failed: ${err && err.message ? err.message : String(err)}`;
@@ -2971,6 +3020,10 @@ try {
 
 // Curtis BCH full-UI compatibility layer.
 document.addEventListener('DOMContentLoaded', () => {
+  refreshConnectInfo();
+  wireCopyButton('copy-connect-url', 'connect-url');
+  wireCopyButton('copy-connect-user', 'connect-user');
+  wireCopyButton('copy-connect-pass', 'connect-pass');
   const titleMap = {home:'Mining Overview', pool:'Connected Miners', luck:'Current Round', blocks:'Block History', settings:'Settings', project:'About Curtis BCH'};
   document.querySelectorAll('[data-tab]').forEach(btn => btn.addEventListener('click', () => {
     document.querySelectorAll('[data-tab]').forEach(x => x.classList.remove('active'));
@@ -3004,3 +3057,5 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('pool-settings-form')?.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));
   });
 });
+
+setInterval(() => { try { refreshConnectInfo(); } catch {} }, 15000);

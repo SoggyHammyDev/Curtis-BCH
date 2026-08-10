@@ -46,7 +46,7 @@ services:
         chmod -R ug+rwX /data || true
 
   bchn:
-    image: ghcr.io/soggyhammydev/curtis-bch-bchn:0.1.6
+    image: ghcr.io/soggyhammydev/curtis-bch-bchn:0.1.7
     user: "1000:1000"
     restart: unless-stopped
     stop_grace_period: 15m30s
@@ -72,7 +72,7 @@ services:
       start_period: 2m
 
   ckpool:
-    image: ghcr.io/soggyhammydev/curtis-bch-ckpool:0.1.6
+    image: ghcr.io/soggyhammydev/curtis-bch-ckpool:0.1.7
     user: "1000:1000"
     depends_on:
       - bchn
@@ -85,7 +85,7 @@ services:
       - ${APP_DATA_DIR}/data/pool/www:/www
 
   app:
-    image: ghcr.io/soggyhammydev/curtis-bch-app:0.1.6
+    image: ghcr.io/soggyhammydev/curtis-bch-app:0.1.7
     user: "1000:1000"
     restart: on-failure
     stop_grace_period: 30s
@@ -113,7 +113,7 @@ services:
       CKPOOL_STRATUM_HOST: ckpool
       CKPOOL_STRATUM_PORT: "3333"
       APP_CHANNEL: CURTIS
-      APP_VERSION: "0.1.6"
+      APP_VERSION: "0.1.7"
       STATIC_DIR: /app/static
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import sys,urllib.request; r=urllib.request.urlopen('http://127.0.0.1:3000/api/about',timeout=3); sys.exit(0 if r.status==200 else 1)\""]

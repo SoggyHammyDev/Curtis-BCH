@@ -64,7 +64,7 @@ SUPPORT_CHECKIN_URL = _env_or_default("SUPPORT_CHECKIN_URL", f"{DEFAULT_SUPPORT_
 SUPPORT_TICKET_URL = _env_or_default("SUPPORT_TICKET_URL", f"{DEFAULT_SUPPORT_BASE_URL}/api/support/upload")
 
 APP_ID = "curtis-bch"
-APP_VERSION = os.getenv("APP_VERSION", "0.1.6").strip() or "0.1.6"
+APP_VERSION = os.getenv("APP_VERSION", "0.1.7").strip() or "0.1.7"
 APP_VERSION_SUFFIX = os.getenv("APP_VERSION_SUFFIX", "").strip()
 DISPLAY_VERSION = f"{APP_VERSION}{APP_VERSION_SUFFIX}"
 
@@ -898,7 +898,24 @@ def _current_settings():
         prune = int(conf.get("prune") or 5500)
     except Exception:
         prune = 5500
-    return {"prune": prune}
+    network = "testnet4" if str(conf.get("testnet4") or "0").strip().lower() in ("1", "true") else "mainnet"
+    return {"prune": prune, "network": network}
+
+
+def _update_network_conf(network: str):
+    network = str(network or "mainnet").strip().lower()
+    if network not in ("mainnet", "testnet4"):
+        raise ValueError("network must be mainnet or testnet4")
+    NODE_CONF_PATH.parent.mkdir(parents=True, exist_ok=True)
+    lines = NODE_CONF_PATH.read_text(encoding="utf-8", errors="replace").splitlines() if NODE_CONF_PATH.exists() else []
+    _set_conf_key(lines, "testnet", "0")
+    _set_conf_key(lines, "regtest", "0")
+    _set_conf_key(lines, "scalenet", "0")
+    _set_conf_key(lines, "chipnet", "0")
+    _set_conf_key(lines, "testnet4", "1" if network == "testnet4" else "0")
+    NODE_CONF_PATH.write_text("
+".join(lines).rstrip() + "
+", encoding="utf-8")
 
 
 def _update_prune_conf(prune: int):
@@ -3779,6 +3796,30 @@ def _blocks_api() -> dict:
     return {"events": out, "backscan": backscan}
 
 
+
+def _request_ipv4(handler) -> str | None:
+    try:
+        host = str(handler.headers.get("Host") or "").strip()
+        if host.startswith("["):
+            return None
+        host_only = host.rsplit(":", 1)[0] if ":" in host else host
+        socket.inet_aton(host_only)
+        if host_only.count(".") == 3 and not host_only.startswith("127."):
+            return host_only
+    except Exception:
+        pass
+    try:
+        host = str(handler.headers.get("Host") or "").strip()
+        host_only = host.rsplit(":", 1)[0] if ":" in host else host
+        resolved = socket.gethostbyname(host_only)
+        socket.inet_aton(resolved)
+        if not resolved.startswith("127.") and not resolved.startswith("10.21."):
+            return resolved
+    except Exception:
+        pass
+    return None
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = f"{APP_ID}/{APP_VERSION}"
 
@@ -3793,8 +3834,47 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/about":
             return self._send(*_json(_about()))
 
+        if self.path == "/api/connect-info":
+            pool = _pool_settings()
+            node_chain = None
+            try:
+                node_chain = (_node_status() or {}).get("chain")
+            except Exception:
+                pass
+            return self._send(*_json({
+                "ipv4": _request_ipv4(self),
+                "stratumPort": 6387,
+                "payoutAddress": pool.get("payoutAddress"),
+                "configured": bool(pool.get("configured")),
+                "chain": node_chain,
+                "network": _current_settings().get("network"),
+            }))
+
         if self.path == "/api/settings":
-            return self._send(*_json(_current_settings()))
+            current = _current_settings()
+            try:
+                prune = int(body.get("prune", current.get("prune", 5500)))
+            except Exception:
+                return self._send(*_json({"error": "invalid prune"}, status=400))
+            if prune != 0 and prune < 550:
+                return self._send(*_json({"error": "prune must be 0 or >= 550 MiB"}, status=400))
+
+            network = str(body.get("network", current.get("network", "mainnet")) or "mainnet").strip().lower()
+            if network not in ("mainnet", "testnet4"):
+                return self._send(*_json({"error": "network must be mainnet or testnet4"}, status=400))
+
+            try:
+                _update_prune_conf(prune)
+                _update_network_conf(network)
+            except Exception as e:
+                return self._send(*_json({"error": str(e)}, status=400))
+
+            return self._send(*_json({
+                "ok": True,
+                "settings": {"prune": prune, "network": network},
+                "restartRequired": True,
+                "networkChanged": network != current.get("network"),
+            }))
 
         if self.path == "/api/pool/settings":
             return self._send(*_json(_pool_settings()))
@@ -3903,17 +3983,30 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(*_json({"error": "invalid json"}, status=400))
 
         if self.path == "/api/settings":
+            current = _current_settings()
             try:
-                prune = int(body.get("prune"))
+                prune = int(body.get("prune", current.get("prune", 5500)))
             except Exception:
                 return self._send(*_json({"error": "invalid prune"}, status=400))
             if prune != 0 and prune < 550:
                 return self._send(*_json({"error": "prune must be 0 or >= 550 MiB"}, status=400))
+
+            network = str(body.get("network", current.get("network", "mainnet")) or "mainnet").strip().lower()
+            if network not in ("mainnet", "testnet4"):
+                return self._send(*_json({"error": "network must be mainnet or testnet4"}, status=400))
+
             try:
                 _update_prune_conf(prune)
+                _update_network_conf(network)
             except Exception as e:
                 return self._send(*_json({"error": str(e)}, status=400))
-            return self._send(*_json({"ok": True, "settings": {"prune": prune}, "restartRequired": True}))
+
+            return self._send(*_json({
+                "ok": True,
+                "settings": {"prune": prune, "network": network},
+                "restartRequired": True,
+                "networkChanged": network != current.get("network"),
+            }))
 
         if self.path == "/api/pool/settings":
             payout_address = str(body.get("payoutAddress") or "")

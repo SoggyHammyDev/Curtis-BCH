@@ -1,13 +1,18 @@
-# Curtis BCH 0.1.6
+# Curtis BCH 0.1.7
 
-Fix release for the redesigned Umbrel UI.
+New in 0.1.7:
+- Permanently disables the BCHN wallet (`disablewallet=1`).
+- Adds Mainnet / Testnet4 switching in Node Settings.
+- Testnet4 uses BCHN's network-specific data directory, keeping mainnet data separate.
+- Adds a Connect a Miner dashboard card.
+- Auto-detects the dashboard request's IPv4 address for the Stratum URL when available.
+- Shows Stratum URL, username pattern, password, and copy buttons.
 
-- Live block/header height during initial sync
-- Live difficulty during initial sync
-- Sync shows verification progress and block-height progress
-- Node settings reduced to Prune Size only
-- Prune Save button now writes bitcoin.conf
-- Saved prune target survives BCHN restarts
-- Existing blockchain data is preserved
+Ports:
+- UI 24781
+- Stratum 6387
+- BCH P2P host 28447
+- BCH RPC internal 28332
 
-Ports: UI 24781, Stratum 6387, BCH P2P 28447.
+After changing Mainnet/Testnet4, restart Curtis BCH from Umbrel.
+Use a `bchtest:` payout address for Testnet4.

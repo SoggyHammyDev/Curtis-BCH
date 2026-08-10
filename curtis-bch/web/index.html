@@ -79,13 +79,24 @@
         </article>
 
         <article class="panel">
-          <span class="panel-kicker">NETWORK</span><h2>Bitcoin Cash</h2>
+          <span class="panel-kicker">NETWORK</span><h2 id="network-title">Bitcoin Cash</h2>
           <dl class="facts">
             <div><dt>Height</dt><dd id="height">-</dd></div>
             <div><dt>Difficulty</dt><dd id="difficulty">-</dd></div>
             <div><dt>Peers</dt><dd id="peers">-</dd></div>
             <div><dt>Sync</dt><dd id="sync">-</dd></div>
           </dl>
+        </article>
+        <article class="panel span3 connect-panel">
+          <div class="panel-head"><div><span class="panel-kicker">STRATUM</span><h2>Connect a miner</h2></div><span id="connect-network-badge" class="health">Loading</span></div>
+          <p class="muted small">Use these values in your ASIC's pool configuration.</p>
+          <div class="connect-grid">
+            <div class="connect-field"><span>Pool URL</span><code id="connect-url">Detecting IPv4…</code><button class="ghost copy-mini" id="copy-connect-url" type="button">Copy</button></div>
+            <div class="connect-field"><span>Username</span><code id="connect-user">Set payout address first</code><button class="ghost copy-mini" id="copy-connect-user" type="button">Copy</button></div>
+            <div class="connect-field"><span>Password</span><code id="connect-pass">x</code><button class="ghost copy-mini" id="copy-connect-pass" type="button">Copy</button></div>
+          </div>
+          <p id="connect-note" class="muted small">Curtis BCH will use the IPv4 address you used to open this dashboard.</p>
+          <p class="muted small">For named workers, append <code>.worker-name</code> to the payout address, for example <code>bitcoincash:q…​.Gamma-1</code>.</p>
         </article>
 
         <article class="panel span3">
@@ -152,8 +163,15 @@
         </article>
         <article class="panel">
           <span class="panel-kicker">NODE</span><h2>BCHN configuration</h2>
+          <label>Network
+            <select id="nodeNetwork" class="input">
+              <option value="mainnet">Mainnet</option>
+              <option value="testnet4">Testnet4 · mining test</option>
+            </select>
+          </label>
+          <p class="muted small">Testnet4 keeps its blockchain separate from mainnet. Use a <code>bchtest:</code> payout address for test mining.</p>
           <label>Prune size · MiB<input id="pruneMiB" class="input" type="number"></label>
-          <button id="saveNodeSettings" class="primary">Save prune size</button><div id="nodeSettingsStatus" class="muted small"></div>
+          <button id="saveNodeSettings" class="primary">Save node settings</button><div id="nodeSettingsStatus" class="muted small"></div>
         </article>
         <article class="panel danger-zone">
           <span class="panel-kicker">RECORDS</span><h2>Best share tracker</h2><p class="muted">Reset the Curtis BCH “since block” best-share record without altering CKPool's own files.</p>
