@@ -1,39 +1,27 @@
-# Curtis BCH — Umbrel Community App Store
+# Curtis BCH — Umbrel Fixed Build 0.1.3
 
-This package turns the full Curtis BCH UI revamp into an Umbrel community-store repository.
+This build follows the known-working AxeBCH BCHN/CKPool startup pattern from the user's Umbrel.
 
-## Included
-- Umbrel store manifest
-- `curtis-bch/umbrel-app.yml`
-- Umbrel `docker-compose.yml`
-- BCHN + CKPool + Curtis BCH app stack
-- First-boot BCHN/CKPool configuration
-- Persistent node, pool, UI, and settings data
-- Umbrel sync + pool widgets
-- GHCR build/publish workflow for the Curtis BCH web image
-
-## Publish/install
-1. Put these files at the root of your GitHub repository.
-2. Push to `main`.
-3. GitHub Actions builds `ghcr.io/akacurtis/curtis-bch-app:0.1.0`.
-4. In GitHub Packages, make the `curtis-bch-app` package public.
-5. Add that GitHub repository as a Community App Store in Umbrel.
-6. Install **Curtis BCH**.
-
-Dashboard is exposed by Umbrel on app port `24781`.
-Miners connect to `stratum+tcp://YOUR_UMBREL_IP:6387`.
-
-## Existing BCH data
-This app uses its own Umbrel app ID (`curtis-bch`), so a fresh install gets a new app-data directory. Do not delete an existing AxeBCH/BCH app until you have copied or backed up any node/pool state you want to preserve.
-
-## Images
-The node/pool image tags mirror the BCH stack previously observed working on the Umbrel host:
-- `ghcr.io/willitmod/bitcoin-cash-node:v29.0.0-wm2`
-- `ghcr.io/willitmod/wim-solo-ckpool:0.8.3-rc1-590fb2a`
-
-The Curtis BCH dashboard image is built from `curtis-bch/web/` by the included GitHub Actions workflow.
-
-
-## Assigned ports
+## Ports
 - Web UI: `24781`
 - Mining / Stratum: `6387`
+- BCH P2P host port: `28447` -> container `28333`
+
+## Fixes in 0.1.3
+- Proxy now targets unique hostname `curtis-bch-app`, eliminating the shared `app` alias routing collision.
+- BCHN upgraded to `ghcr.io/willitmod/bitcoin-cash-node:v29.0.0-wm3`.
+- Added BCHN entrypoint and RPC/ZMQ setup on `28332` / `28334`.
+- CKPool now explicitly starts with `ckpool -k -B -L -c /config/ckpool.conf`.
+- CKPool config is mounted read-only, matching the proven working stack.
+- CKPool uses `bchn:28332` and `tcp://bchn:28334`.
+- Stratum remains on host port `6387`.
+- P2P remains on host port `28447` to avoid the existing AxeBCH node on `28333`.
+
+## First boot
+CKPool requires a payout address. If no Curtis BCH payout address has been saved yet, CKPool may stop cleanly until a valid address is configured. The web app and BCHN can still start; after setting the payout address, restart Curtis BCH from Umbrel.
+
+## GitHub
+The included workflow publishes:
+`ghcr.io/soggyhammydev/curtis-bch-app:0.1.0`
+
+Make the GHCR package public.

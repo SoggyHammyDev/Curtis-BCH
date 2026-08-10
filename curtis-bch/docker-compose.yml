@@ -3,14 +3,14 @@ version: "3.7"
 services:
   app_proxy:
     environment:
-      APP_HOST: app
+      APP_HOST: curtis-bch-app
       APP_PORT: 3000
       PROXY_AUTH_ADD: "false"
     depends_on:
       - app
 
   init:
-    image: alpine:3.20
+    image: alpine:3.22.1
     user: "0:0"
     restart: "no"
     volumes:
@@ -25,67 +25,43 @@ services:
         apk add --no-cache jq >/dev/null
         mkdir -p /data/node /data/pool/config /data/pool/www/pool /data/pool/www/users /data/ui/state
 
-        if [ ! -s /data/node/bitcoin.conf ]; then
-          cat > /data/node/bitcoin.conf <<EOF
-        server=1
-        txindex=0
-        rpcuser=bch
-        rpcpassword=$${RPC_PASSWORD}
-        rpcallowip=0.0.0.0/0
-        rpcbind=0.0.0.0
-        rpcport=8332
-        port=8333
-        prune=5500
-        dbcache=1024
-        maxmempool=128
-        rpcthreads=8
-        EOF
-        fi
+        # Node config is completed by bchn-entrypoint.sh.
+        touch /data/node/bitcoin.conf
 
+        # Create a CKPool config if one does not exist.
+        # The UI/backend may later replace btcaddress with the configured payout address.
         if [ ! -s /data/pool/config/ckpool.conf ]; then
           cat > /data/pool/config/ckpool.conf <<EOF
         {
+          "btcaddress": "",
           "btcd": [
             {
-              "url": "bchn:8332",
               "auth": "bch",
+              "notify": true,
               "pass": "$${RPC_PASSWORD}",
-              "notify": true
+              "url": "bchn:28332"
             }
           ],
-          "btcaddress": "CHANGEME_BCH_PAYOUT_ADDRESS",
-          "btcsig": "/CurtisBCH/",
-          "blockpoll": 100,
-          "nonce1length": 4,
-          "nonce2length": 8,
-          "update_interval": 30,
-          "version_mask": "1fffe000",
-          "serverurl": ["0.0.0.0:3333"],
-          "mindiff": 1,
-          "startdiff": 16,
-          "maxdiff": 0,
+          "btcsig": "/Curtis BCH/",
           "logdir": "/www",
-          "webdir": "/www/pool",
+          "maxdiff": 0,
+          "mindiff": 1000,
+          "startdiff": 1000000,
           "userdir": "/www/users",
-          "poolfee": 0.0
+          "validated": true,
+          "webdir": "/www/pool",
+          "zmqblock": "tcp://bchn:28334"
         }
         EOF
         fi
 
-        if [ ! -f /data/pool/config/ckpool.args ]; then
-          echo "-B" > /data/pool/config/ckpool.args
-        fi
-
-        # Preserve a payout address previously saved by the Curtis BCH UI.
+        # If Curtis BCH has already saved a payout address, apply it before CKPool starts.
         if [ -f /data/ui/state/pool_settings.json ]; then
-          addr="$$(jq -r '.payoutAddress // empty' /data/ui/state/pool_settings.json 2>/dev/null || true)"
+          addr="$$(jq -r '.payoutAddress // .payout_address // empty' /data/ui/state/pool_settings.json 2>/dev/null || true)"
           if [ -n "$$addr" ]; then
             tmp="$$(mktemp)"
-            if jq --arg a "$$addr" '.btcaddress=$$a' /data/pool/config/ckpool.conf > "$$tmp"; then
-              mv "$$tmp" /data/pool/config/ckpool.conf
-            else
-              rm -f "$$tmp"
-            fi
+            jq --arg a "$$addr" '.btcaddress=$a' /data/pool/config/ckpool.conf > "$$tmp"
+            mv "$$tmp" /data/pool/config/ckpool.conf
           fi
         fi
 
@@ -93,7 +69,7 @@ services:
         chmod -R ug+rwX /data || true
 
   bchn:
-    image: ghcr.io/willitmod/bitcoin-cash-node:v29.0.0-wm2
+    image: ghcr.io/willitmod/bitcoin-cash-node:v29.0.0-wm3
     user: "1000:1000"
     restart: unless-stopped
     stop_grace_period: 15m30s
@@ -104,8 +80,17 @@ services:
       - "28447:28333/tcp"
     volumes:
       - ${APP_DATA_DIR}/data/node:/data
+      - ${APP_DATA_DIR}/templates/bchn-entrypoint.sh:/bchn-entrypoint.sh:ro
+    environment:
+      BCH_RPC_USER: bch
+      BCH_RPC_PASS: "${APP_PASSWORD}"
+    entrypoint:
+      - /bin/sh
+      - /bchn-entrypoint.sh
     healthcheck:
-      test: ["CMD-SHELL", "bitcoin-cli -datadir=/data -rpcuser=bch -rpcpassword=${APP_PASSWORD} getblockchaininfo >/dev/null 2>&1"]
+      test:
+        - CMD-SHELL
+        - bitcoin-cli -datadir=/data getblockchaininfo >/dev/null 2>&1
       interval: 30s
       timeout: 10s
       retries: 20
@@ -113,21 +98,38 @@ services:
 
   ckpool:
     image: ghcr.io/willitmod/wim-solo-ckpool:0.8.3-rc1-590fb2a
+    entrypoint:
+      - /bin/sh
+    command:
+      - "-ec"
+      - |
+        rm -f /tmp/ckpool/*.pid 2>/dev/null || true
+        if command -v ckpool >/dev/null 2>&1; then
+          exec ckpool -k -B -L -c /config/ckpool.conf
+        elif [ -x /bin/ckpool ]; then
+          exec /bin/ckpool -k -B -L -c /config/ckpool.conf
+        elif [ -x /usr/bin/ckpool ]; then
+          exec /usr/bin/ckpool -k -B -L -c /config/ckpool.conf
+        else
+          echo "ckpool binary not found in image"
+          exit 1
+        fi
     user: "1000:1000"
-    restart: on-failure
-    stop_grace_period: 30s
     depends_on:
       - bchn
+    restart: on-failure
+    stop_grace_period: 30s
     ports:
       - "6387:3333/tcp"
     volumes:
-      - ${APP_DATA_DIR}/data/pool/config:/config
+      - ${APP_DATA_DIR}/data/pool/config:/config:ro
       - ${APP_DATA_DIR}/data/pool/www:/www
 
   app:
     image: ghcr.io/soggyhammydev/curtis-bch-app:0.1.0
     user: "1000:1000"
-    restart: unless-stopped
+    restart: on-failure
+    stop_grace_period: 30s
     depends_on:
       - bchn
       - ckpool
@@ -141,23 +143,25 @@ services:
     volumes:
       - ${APP_DATA_DIR}/data:/data
     environment:
-      APP_VERSION: "0.1.0"
-      APP_CHANNEL: "CURTIS"
       NETWORK_IP: "${NETWORK_IP}"
       BCH_RPC_HOST: bchn
-      BCH_RPC_PORT: "8332"
+      BCH_RPC_PORT: "28332"
       BCH_RPC_USER: bch
       BCH_RPC_PASS: "${APP_PASSWORD}"
       BCHN_RPC_HOST: bchn
-      BCHN_RPC_PORT: "8332"
+      BCHN_RPC_PORT: "28332"
       BCHN_RPC_USER: bch
       BCHN_RPC_PASS: "${APP_PASSWORD}"
       CKPOOL_STATUS_DIR: /data/pool/www/pool
       CKPOOL_STRATUM_HOST: ckpool
       CKPOOL_STRATUM_PORT: "3333"
+      APP_CHANNEL: CURTIS
+      APP_VERSION: "0.1.3"
       STATIC_DIR: /app/static
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import sys,urllib.request; r=urllib.request.urlopen('http://127.0.0.1:3000/api/about',timeout=3); sys.exit(0 if r.status==200 else 1)\""]
+      test:
+        - CMD-SHELL
+        - python -c "import sys,urllib.request; r=urllib.request.urlopen('http://127.0.0.1:3000/api/about',timeout=3); sys.exit(0 if r.status==200 else 1)"
       interval: 15s
       timeout: 5s
       retries: 20
