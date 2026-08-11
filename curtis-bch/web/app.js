@@ -1223,8 +1223,10 @@ async function refresh() {
     if (elBestAll) elBestAll.textContent = formatBestShare(pool.best_share_all_time);
     const elEta = document.getElementById('eta');
     if (elEta) elEta.textContent = formatEtaText(pool.eta_text, pool.eta_seconds);
-    document.getElementById('workers-summary').textContent = pool.workers ?? '-';
-    document.getElementById('hashrate-summary').textContent = formatTHS(pool.hashrate_ths);
+    const workersSummaryEl = document.getElementById('workers-summary');
+    if (workersSummaryEl) workersSummaryEl.textContent = pool.workers ?? '-';
+    const hashrateSummaryEl = document.getElementById('hashrate-summary');
+    if (hashrateSummaryEl) hashrateSummaryEl.textContent = formatTHS(pool.hashrate_ths);
     const elEtaSummary = document.getElementById('eta-summary');
     if (elEtaSummary) elEtaSummary.textContent = formatEtaText(pool.eta_text, pool.eta_seconds);
 
@@ -1352,8 +1354,10 @@ async function refresh() {
     if (bestAllWorkerEl) bestAllWorkerEl.textContent = '-';
     const elEta = document.getElementById('eta');
     if (elEta) elEta.textContent = '-';
-    document.getElementById('workers-summary').textContent = '-';
-    document.getElementById('hashrate-summary').textContent = '-';
+    const workersSummaryEl = document.getElementById('workers-summary');
+    if (workersSummaryEl) workersSummaryEl.textContent = '-';
+    const hashrateSummaryEl = document.getElementById('hashrate-summary');
+    if (hashrateSummaryEl) hashrateSummaryEl.textContent = '-';
     const elEtaSummary = document.getElementById('eta-summary');
     if (elEtaSummary) elEtaSummary.textContent = '-';
 
